@@ -181,70 +181,218 @@ button, input, select, textarea {
 
 /* Auth screen styles */
 #auth-screen {
+  width: 100%;
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
   background-color: var(--bg);
-  padding: 24px;
 }
 
 .auth-bg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, var(--bg) 0%, var(--primary-100) 100%);
-  z-index: 0;
-  opacity: 0.5;
-}
-
-.auth-card {
-  position: relative;
-  z-index: 1;
-  background-color: var(--card);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
-  padding: 48px;
   width: 100%;
-  max-width: 440px;
-  border: 1px solid var(--border);
-  text-align: center;
-}
-
-.auth-logo {
-  font-size: 36px;
-  font-weight: 800;
-  color: var(--primary-700);
-  margin-bottom: 8px;
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  padding: 24px;
+  background-color: var(--bg);
+}
+
+.auth-card {
+  background-color: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 40px;
+  width: 100%;
+  max-width: 440px;
+  border: 1.5px solid var(--border);
+  text-align: left;
+  transition: var(--transition);
+}
+
+.auth-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.auth-brand .logo-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background-color: var(--primary-600);
+  color: #fff;
+  font-family: 'Comfortaa', cursive, sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-brand .brand-name {
+  font-family: 'Comfortaa', 'Quicksand', cursive, sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--primary-700);
+  letter-spacing: -0.5px;
+}
+
+.auth-title {
+  font-family: 'Quicksand', 'Plus Jakarta Sans', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
+  margin-bottom: 4px;
 }
 
 .auth-sub {
   color: var(--muted);
-  margin-bottom: 32px;
+  font-size: 14px;
+  text-align: center;
+  margin-bottom: 0;
+}
+
+.auth-card form {
+  margin-top: 20px;
+}
+
+.auth-card .form-group {
+  margin-bottom: 16px;
+}
+
+.auth-card .form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.auth-card .input-wrapper input {
+  width: 100%;
+  padding: 11px 16px;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--text);
+  outline: none;
+  transition: var(--transition);
+}
+
+.auth-card .input-wrapper input:focus {
+  border-color: var(--primary-600);
+  box-shadow: 0 0 0 3px rgba(248, 191, 212, 0.35);
+}
+
+.auth-card .input-wrapper input::placeholder {
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+#login-btn,
+#signup-btn {
+  background-color: var(--primary-600);
+  border: none;
+  color: #FFFFFF;
+  font-weight: 700;
+  font-size: 14.5px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+  margin-top: 6px;
+  width: 100%;
+}
+
+#login-btn:hover:not(:disabled),
+#signup-btn:hover:not(:disabled) {
+  background-color: var(--primary-700);
+}
+
+.auth-switch {
+  text-align: center;
+  margin: 14px 0 10px;
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.auth-switch a {
+  color: var(--primary-700);
+  font-weight: 600;
+}
+
+.demo-btn {
+  background-color: var(--card);
+  border: 1.5px solid var(--border);
+  color: var(--primary-700);
+  font-weight: 600;
+  font-size: 13.5px;
+  padding: 11px;
+  border-radius: var(--radius-sm);
+  margin-top: 6px;
+  cursor: pointer;
+  transition: var(--transition);
+  width: 100%;
+}
+
+.demo-btn:hover {
+  background-color: var(--primary-50);
+  border-color: var(--primary-600);
 }
 
 .auth-error {
-  background-color: rgba(229, 139, 148, 0.1);
-  color: var(--danger);
-  padding: 12px;
+  background-color: rgba(229, 139, 148, 0.12);
+  border: 1px solid var(--danger);
+  color: #C0394A;
+  padding: 10px 14px;
   border-radius: var(--radius-xs);
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   font-size: 13px;
-  display: none;
+  text-align: center;
 }
 
 .forgot-link {
   display: block;
-  text-align: right;
+  text-align: center;
   font-size: 12px;
-  margin-top: 8px;
+  margin-top: 14px;
   color: var(--muted);
+}
+
+.auth-error {
+  background-color: rgba(229, 139, 148, 0.12);
+  border: 1px solid var(--danger);
+  color: #C0394A;
+  padding: 12px 16px;
+  border-radius: 12px;
+  margin-bottom: 18px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.forgot-link {
+  display: block;
+  text-align: center;
+  font-size: 12.5px;
+  margin-top: 18px;
+  color: var(--muted);
+  font-weight: 500;
 }
 
 .forgot-link:hover {
@@ -941,20 +1089,12 @@ tbody tr:hover {
   right: 0;
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   backdrop-filter: blur(4px);
   padding: 24px;
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.2s ease;
-}
-
-.modal-overlay.active {
-  opacity: 1;
-  visibility: visible;
 }
 
 .modal-box {
@@ -1056,8 +1196,9 @@ tbody tr:hover {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: var(--bg);
-  display: flex;
+  background-color: rgba(255, 248, 251, 0.8);
+  backdrop-filter: blur(4px);
+  display: none;
   align-items: center;
   justify-content: center;
   z-index: 9999;
