@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HayPOS — POS &amp; Order Management</title>
+  <title>BNC HayMate — POS &amp; Order Management</title>
 
-  <!-- Google Fonts: Plus Jakarta Sans -->
+  <!-- Google Fonts: Plus Jakarta Sans, Comfortaa, Quicksand -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
 
   <!-- Application Styles -->
   <link rel="stylesheet" href="styles.css">
@@ -26,20 +26,20 @@
   ============================================================ -->
   <div id="setup-screen" style="display:none">
     <div class="setup-card" style="text-align: center;">
-      <div class="setup-logo">H</div>
-      <h1 style="font-size: 24px; font-weight: 800; margin-bottom: 8px;">HayBerry Café POS</h1>
+      <div class="setup-logo">B</div>
+      <h1 style="font-size: 24px; font-weight: 800; margin-bottom: 8px;">BNC HayMate POS</h1>
       <p style="color: var(--muted); margin-bottom: 24px;">ระบบจัดการร้านและจุดขาย POS ครบวงจร</p>
       
       <div style="background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 20px; margin-bottom: 24px; text-align: left;">
-        <h3 style="font-weight: 700; margin-bottom: 12px; font-size: 16px;">⚡ ใช้งานโหมดทดลองทันที (Demo Mode)</h3>
+        <h3 style="font-weight: 700; margin-bottom: 12px; font-size: 16px;">ใช้งานโหมดทดลองทันที (Demo Mode)</h3>
         <p style="font-size: 13px; color: var(--muted); margin-bottom: 16px;">ทดลองใช้งานระบบ POS, Dashboard, รายการสินค้า 300+ รายการ, ประวัติออเดอร์, และรายงาน โดยไม่ต้องเชื่อมต่อฐานข้อมูล</p>
-        <button class="btn btn-primary btn-full" onclick="startDemoMode()" style="background: #2563eb; color: #fff; font-weight: 700; font-size: 15px; padding: 12px;">
-          🚀 เปิดใช้งานโหมดทดลองทันที (Demo Mode)
+        <button class="btn btn-primary btn-full" onclick="startDemoMode()" style="background: var(--primary-600); color: #fff; font-weight: 700; font-size: 15px; padding: 12px;">
+          เปิดใช้งานโหมดทดลองทันที (Demo Mode)
         </button>
       </div>
 
       <details style="text-align: left; background: #fff; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px;">
-        <summary style="font-weight: 600; cursor: pointer; color: var(--text);">🔧 วิธีเชื่อมต่อ Supabase Database จริง</summary>
+        <summary style="font-weight: 600; cursor: pointer; color: var(--text);">วิธีเชื่อมต่อ Supabase Database จริง</summary>
         <div class="setup-steps" style="margin-top: 16px;">
           <div class="setup-step">
             <span class="step-num">1</span>
@@ -69,35 +69,78 @@
   </div>
 
   <!-- ============================================================
-       AUTH SCREEN — Login page
+       AUTH SCREEN — Login & Sign Up
   ============================================================ -->
-  <div id="auth-screen" style="display:none">
+  <div id="auth-screen">
     <div class="auth-bg">
       <div class="auth-card">
-        <div class="auth-logo">
-          <div class="logo-icon">H</div>
-          <span>HayPOS</span>
+        <div class="auth-header">
+          <div class="auth-brand">
+            <div class="logo-icon">B</div>
+            <span class="brand-name">BNC HayMate</span>
+          </div>
+          <h2 class="auth-title" id="auth-main-title">Welcome back</h2>
+          <p class="auth-sub" id="auth-main-sub">Sign in to your account</p>
         </div>
-        <h2>Welcome back</h2>
-        <p class="auth-sub">Sign in to your account</p>
+
+        <!-- Sign In Form -->
         <form id="login-form">
           <div class="form-group">
-            <label>Email</label>
-            <input type="email" id="login-email" placeholder="you@example.com" required>
+            <label for="login-email">Email Address</label>
+            <div class="input-wrapper">
+              <input type="email" id="login-email" placeholder="you@example.com" required autocomplete="email">
+            </div>
           </div>
           <div class="form-group">
-            <label>Password</label>
-            <input type="password" id="login-password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" required>
+            <label for="login-password">Password</label>
+            <div class="input-wrapper">
+              <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
+            </div>
           </div>
           <div id="auth-error" class="auth-error" style="display:none"></div>
           <button type="submit" class="btn btn-primary btn-full" id="login-btn">
             Sign In
           </button>
-          <button type="button" class="btn btn-outline btn-full" onclick="startDemoMode()" style="margin-top: 12px; font-weight: 700;">
-            ⚡ ทดลองใช้งานโหมดเดโม่ (Demo Mode)
+          <div class="auth-switch">
+            <span>Don't have an account?</span>
+            <a href="#" id="toggle-signup-link">Create an account</a>
+          </div>
+          <button type="button" class="btn btn-outline btn-full demo-btn" onclick="startDemoMode()">
+            ทดลองใช้งานโหมดเดโม่ (Demo Mode)
           </button>
+          <a href="#" class="forgot-link" id="forgot-link">Forgot password?</a>
         </form>
-        <a href="#" class="forgot-link" id="forgot-link">Forgot password?</a>
+
+        <!-- Sign Up Form (hidden by default) -->
+        <form id="signup-form" style="display:none">
+          <div class="form-group">
+            <label for="signup-name">Full Name / Store Name</label>
+            <div class="input-wrapper">
+              <input type="text" id="signup-name" placeholder="e.g. Mira (BNC HayMate)" required autocomplete="name">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="signup-email">Email Address</label>
+            <div class="input-wrapper">
+              <input type="email" id="signup-email" placeholder="you@example.com" required autocomplete="email">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="signup-password">Password (at least 6 characters)</label>
+            <div class="input-wrapper">
+              <input type="password" id="signup-password" placeholder="••••••••" required minlength="6" autocomplete="new-password">
+            </div>
+          </div>
+          <div id="signup-error" class="auth-error" style="display:none"></div>
+          <button type="submit" class="btn btn-primary btn-full" id="signup-btn">
+            Create Account
+          </button>
+          <div class="auth-switch">
+            <span>Already have an account?</span>
+            <a href="#" id="toggle-signin-link">Sign In</a>
+          </div>
+        </form>
+
       </div>
     </div>
   </div>
@@ -111,9 +154,9 @@
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <div class="sidebar-logo">
-          <div class="logo-icon">H</div>
+          <div class="logo-icon">B</div>
           <div class="logo-text">
-            <span class="logo-name">HayPOS</span>
+            <span class="logo-name">BNC HayMate</span>
             <span class="logo-store" id="sidebar-store-name">Loading...</span>
           </div>
         </div>
