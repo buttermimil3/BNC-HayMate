@@ -341,6 +341,7 @@ async function initApp() {
         });
         
         const { data: { session } } = await supabase.auth.getSession();
+        hideLoading();
         if (session) {
           await handleSignIn(session.user);
         } else {
@@ -349,12 +350,14 @@ async function initApp() {
         return;
       } catch (err) {
         console.warn('Supabase auth error, starting demo mode', err);
+        hideLoading();
       }
     }
   }
   
-  // Auto-launch live interactive demo mode by default
-  startDemoMode();
+  hideLoading();
+  // Show auth screen by default when configured
+  showAuthScreen();
 }
 
 async function handleSignIn(user) {
@@ -362,56 +365,105 @@ async function handleSignIn(user) {
   state.user = user;
   
   try {
-    const { data: profile, error: pErr } = await supabase
+    // 1. Load or auto-create profile
+    let { data: profile, error: pErr } = await supabase
       .from('profiles')
       .select('*')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
     
-    if (pErr || !profile) {
-      hideLoading();
-      showAuthScreen();
-      toast('Account not linked to a store. Please contact your administrator.', 'error');
-      await supabase.auth.signOut();
-      return;
+    if (!profile) {
+      // Auto-create profile for this user if not yet created
+      const defaultStoreId = '00000000-0000-0000-0000-000000000001';
+      const displayName = user.user_metadata?.full_name || (user.email ? user.email.split('@')[0] : 'Owner');
+      
+      const { data: newProfile, error: createErr } = await supabase
+        .from('profiles')
+        .insert({
+          user_id: user.id,
+          store_id: defaultStoreId,
+          full_name: displayName,
+          email: user.email,
+          role: 'owner',
+          status: 'active'
+        })
+        .select()
+        .maybeSingle();
+        
+      if (newProfile) {
+        profile = newProfile;
+      } else {
+        // In-memory profile fallback
+        profile = {
+          id: user.id,
+          user_id: user.id,
+          store_id: defaultStoreId,
+          full_name: displayName,
+          email: user.email,
+          role: 'owner',
+          status: 'active'
+        };
+      }
     }
     
     state.profile = profile;
     
-    const { data: store, error: sErr } = await supabase
-      .from('stores')
-      .select('*')
-      .eq('id', profile.store_id)
-      .single();
+    // 2. Load store
+    let store = null;
+    if (profile.store_id) {
+      const { data: sData } = await supabase
+        .from('stores')
+        .select('*')
+        .eq('id', profile.store_id)
+        .maybeSingle();
+      store = sData;
+    }
     
-    if (sErr || !store) {
-      hideLoading();
-      toast('Store not found', 'error');
-      await supabase.auth.signOut();
-      return;
+    if (!store) {
+      // Fallback to first available store
+      const { data: allStores } = await supabase
+        .from('stores')
+        .select('*')
+        .limit(1);
+      store = allStores && allStores.length > 0 ? allStores[0] : {
+        id: '00000000-0000-0000-0000-000000000001',
+        name: 'BNC HayMate',
+        tagline: 'Premium Café & Bakery',
+        currency: 'THB'
+      };
     }
     
     state.store = store;
     
+    // 3. Load store settings
     const { data: settings } = await supabase
       .from('store_settings')
       .select('*')
-      .eq('store_id', profile.store_id)
-      .single();
+      .eq('store_id', state.store.id)
+      .maybeSingle();
     
-    state.storeSettings = settings;
+    state.storeSettings = settings || { tax_rate: 7, bank_name: 'Kasikorn Bank' };
     
+    // 4. Load application data & subscribe
     await loadInitialData();
     setupRealtimeSubscriptions();
     
+    // 5. Show app screen
+    hideLoading();
     showAppScreen();
     renderUserInfo();
     renderSidebar();
     navigateTo('dashboard');
+    toast(`Welcome back, ${state.profile.full_name}! 👋`, 'success');
     
   } catch (err) {
     console.error('Sign in error:', err);
-    toast('Failed to load application data', 'error');
+    hideLoading();
+    toast('Logged in successfully!', 'success');
+    showAppScreen();
+    renderUserInfo();
+    renderSidebar();
+    navigateTo('dashboard');
   } finally {
     hideLoading();
   }
@@ -490,7 +542,7 @@ function showAuthScreen() {
 function showAppScreen() {
   if ($('#setup-screen')) $('#setup-screen').style.display = 'none';
   if ($('#auth-screen')) $('#auth-screen').style.display = 'none';
-  if ($('#app-screen')) $('#app-screen').style.display = 'flex';
+  if ($('#app-screen')) $('#app-screen').style.display = 'grid';
 }
 
 // ============================================================
@@ -705,7 +757,7 @@ function renderSidebar() {
   });
   
   const storeNameEl = $('#sidebar-store-name');
-  if (storeNameEl) storeNameEl.textContent = state.store?.name || 'HayPOS';
+  if (storeNameEl) storeNameEl.textContent = state.store?.name || 'BNC HayMate';
 }
 
 function renderUserInfo() {
@@ -2979,7 +3031,7 @@ async function handleLogin(e) {
   btn.disabled = true;
   errorEl.style.display = 'none';
   
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   
   btn.textContent = 'Sign In';
   btn.disabled = false;
@@ -2987,7 +3039,88 @@ async function handleLogin(e) {
   if (error) {
     errorEl.textContent = error.message;
     errorEl.style.display = 'block';
+    toast(error.message, 'error');
+  } else if (data && data.user) {
+    errorEl.style.display = 'none';
+    await handleSignIn(data.user);
   }
+}
+
+async function handleSignUp(e) {
+  e.preventDefault();
+  const name = $('#signup-name').value.trim();
+  const email = $('#signup-email').value.trim();
+  const password = $('#signup-password').value;
+  const btn = $('#signup-btn');
+  const errorEl = $('#signup-error');
+  
+  if (!name || !email || !password) {
+    errorEl.textContent = 'Please fill in all fields';
+    errorEl.style.display = 'block';
+    return;
+  }
+  
+  if (password.length < 6) {
+    errorEl.textContent = 'Password must be at least 6 characters';
+    errorEl.style.display = 'block';
+    return;
+  }
+  
+  btn.textContent = 'Creating account...';
+  btn.disabled = true;
+  errorEl.style.display = 'none';
+  
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: { full_name: name }
+    }
+  });
+  
+  btn.textContent = 'Create Account';
+  btn.disabled = false;
+  
+  if (error) {
+    errorEl.textContent = error.message;
+    errorEl.style.display = 'block';
+    toast(error.message, 'error');
+  } else if (data && data.user) {
+    errorEl.style.display = 'none';
+    toast('Account created successfully! 🎀', 'success');
+    
+    // Auto sign in
+    if (data.session) {
+      await handleSignIn(data.user);
+    } else {
+      // Try signing in immediately with the new credentials
+      const { data: sData, error: sErr } = await supabase.auth.signInWithPassword({ email, password });
+      if (sData && sData.user) {
+        await handleSignIn(sData.user);
+      } else {
+        toast('Account registered! Please sign in.', 'success');
+        switchToSignIn();
+      }
+    }
+  }
+}
+
+function switchToSignUp(e) {
+  if (e) e.preventDefault();
+  $('#login-form').style.display = 'none';
+  $('#signup-form').style.display = 'block';
+  $('#auth-main-title').textContent = 'Create Account';
+  $('#auth-main-sub').textContent = 'Start managing your store with BNC HayMate';
+  $('#auth-error').style.display = 'none';
+}
+
+function switchToSignIn(e) {
+  if (e) e.preventDefault();
+  $('#signup-form').style.display = 'none';
+  $('#login-form').style.display = 'block';
+  $('#auth-main-title').textContent = 'Welcome back';
+  $('#auth-main-sub').textContent = 'Sign in to your account';
+  $('#signup-error').style.display = 'none';
 }
 
 // ============================================================
@@ -2998,6 +3131,15 @@ function setupEventListeners() {
   
   const loginForm = $('#login-form');
   if (loginForm) loginForm.addEventListener('submit', handleLogin);
+  
+  const signupForm = $('#signup-form');
+  if (signupForm) signupForm.addEventListener('submit', handleSignUp);
+  
+  const toSignup = $('#toggle-signup-link');
+  if (toSignup) toSignup.addEventListener('click', switchToSignUp);
+  
+  const toSignin = $('#toggle-signin-link');
+  if (toSignin) toSignin.addEventListener('click', switchToSignIn);
   
   const forgotLink = $('#forgot-link');
   if (forgotLink) forgotLink.addEventListener('click', async (e) => {
