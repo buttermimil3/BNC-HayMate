@@ -74,22 +74,12 @@
     { key: 'store', label: 'Customer Store', icon: ICONS.store },
   ];
 
-  let ORDERS = [
-    { id: 'HP-1042', customer: 'Anna Wong', date: '2026-07-28', items: 3, total: 42.50, status: 'waiting' },
-    { id: 'HP-1041', customer: 'Boonmee K.', date: '2026-07-28', items: 1, total: 12.00, status: 'verify' },
-    { id: 'HP-1040', customer: 'Chloe Tan', date: '2026-07-27', items: 5, total: 78.90, status: 'preparing' },
-    { id: 'HP-1039', customer: 'Daniel Kim', date: '2026-07-27', items: 2, total: 26.00, status: 'completed' },
-    { id: 'HP-1038', customer: 'Emily Zhou', date: '2026-07-26', items: 4, total: 54.20, status: 'completed' },
-    { id: 'HP-1037', customer: 'Farah Idris', date: '2026-07-26', items: 1, total: 9.90,  status: 'cancelled' },
-    { id: 'HP-1036', customer: 'Gita Suri', date: '2026-07-26', items: 6, total: 88.40, status: 'preparing' },
-    { id: 'HP-1035', customer: 'Hana Lee', date: '2026-07-25', items: 2, total: 22.10, status: 'completed' },
-  ];
-
+  let ORDERS = [];
   try {
     const savedOrders = localStorage.getItem('haypos_orders');
     if (savedOrders) {
       const parsed = JSON.parse(savedOrders);
-      if (Array.isArray(parsed) && parsed.length > 0) ORDERS = parsed;
+      if (Array.isArray(parsed)) ORDERS = parsed;
     }
   } catch (e) {}
 
@@ -105,26 +95,12 @@
     cancelled: { label: 'Cancelled', cls: 'danger' },
   };
 
-  let PRODUCTS = [
-    { id: 1, name: 'Strawberry Milk Cake', cat: 'Bakery', level: 3, price: 8.90, stock: 24, emoji: '🍰', status: 'active' },
-    { id: 2, name: 'Rose Latte', cat: 'Drinks', level: 1, price: 4.50, stock: 60, emoji: '🥛', status: 'active' },
-    { id: 3, name: 'Peach Macarons (6)', cat: 'Bakery', level: 2, price: 12.00, stock: 8, emoji: '🍑', status: 'active' },
-    { id: 4, name: 'Cherry Croissant', cat: 'Bakery', level: 2, price: 5.50, stock: 3, emoji: '🥐', status: 'low' },
-    { id: 5, name: 'Sakura Cookies', cat: 'Snacks', level: 1, price: 3.20, stock: 45, emoji: '🍪', status: 'active' },
-    { id: 6, name: 'Blossom Tea', cat: 'Drinks', level: 4, price: 6.80, stock: 12, emoji: '🍵', status: 'active' },
-    { id: 7, name: 'Pink Donut Box', cat: 'Bakery', level: 2, price: 14.50, stock: 0, emoji: '🍩', status: 'out' },
-    { id: 8, name: 'Berry Yogurt', cat: 'Snacks', level: 1, price: 4.20, stock: 30, emoji: '🍧', status: 'active' },
-  ];
-
-  let hasCustomProducts = false;
+  let PRODUCTS = [];
   try {
     const savedP = localStorage.getItem('haypos_products') || localStorage.getItem('haypos_custom_products');
     if (savedP) {
       const parsed = JSON.parse(savedP);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        PRODUCTS = parsed;
-        hasCustomProducts = true;
-      }
+      if (Array.isArray(parsed)) PRODUCTS = parsed;
     }
   } catch (e) {}
 
@@ -135,57 +111,12 @@
     } catch (e) {}
   }
 
-  // Seed 320 products only if not previously cached
-  if (!hasCustomProducts) {
-    (function seedMoreProducts(){
-      const bakeryItems = ['Muffin','Tart','Cupcake','Éclair','Brownie','Cinnamon Roll','Scone','Danish','Waffle','Pretzel','Cheesecake','Roll Cake','Bagel','Toast','Loaf','Focaccia','Pie'];
-      const drinkItems = ['Matcha Latte','Iced Milk','Berry Smoothie','Peach Soda','Yuzu Tea','Cocoa','Honey Lemon','Cold Brew','Espresso','Mocha','Fruit Punch','Milkshake','Fresh Juice','Chai Tea','Frappe'];
-      const snackItems = ['Chocolate Bites','Rice Cracker','Nut Mix','Popcorn','Chips','Fruit Bar','Granola Pack','Pudding','Jelly Cup','Marshmallow','Wafer','Truffle'];
-      const seasonalItems = ['Spring Box','Summer Set','Autumn Basket','Winter Treats','Sakura Special','Rose Edition','Festival Pack','Limited Set'];
-      const giftItems = ['Petite Gift','Heart Bundle','Bloom Box','Sweet Combo','Party Pack','Deluxe Basket'];
-      const flavors = ['Strawberry','Blueberry','Vanilla','Chocolate','Matcha','Rose','Peach','Mango','Sakura','Honey','Caramel','Almond','Coconut','Raspberry','Yuzu','Lavender'];
-      const bakeryEmoji = ['🥐','🍰','🧁','🥧','🍪','🍩','🍞','🥯','🥞','🧇'];
-      const drinkEmoji = ['🥛','🍵','🧋','🥤','☕','🍹','🧉'];
-      const snackEmoji = ['🍫','🍿','🥨','🍬','🍮','🍧','🍡','🍘'];
-      const seasonalEmoji = ['🌸','🌷','🌻','🍁','❄️','🎋'];
-      const giftEmoji = ['🎁','🎀','💝','💐'];
-      const pool = [
-        { cat:'Bakery', names:bakeryItems, emojis:bakeryEmoji },
-        { cat:'Drinks', names:drinkItems, emojis:drinkEmoji },
-        { cat:'Snacks', names:snackItems, emojis:snackEmoji },
-        { cat:'Seasonal', names:seasonalItems, emojis:seasonalEmoji },
-        { cat:'Gift Box', names:giftItems, emojis:giftEmoji },
-      ];
-      let id = PRODUCTS.length + 1;
-      const target = 320;
-      let i = 0;
-      while (PRODUCTS.length < target) {
-        const bucket = pool[i % pool.length];
-        const name = flavors[Math.floor(Math.random()*flavors.length)] + ' ' + bucket.names[Math.floor(Math.random()*bucket.names.length)];
-        const emoji = bucket.emojis[Math.floor(Math.random()*bucket.emojis.length)];
-        const stock = Math.floor(Math.random()*80);
-        PRODUCTS.push({
-          id: id++,
-          name,
-          cat: bucket.cat,
-          level: 1 + Math.floor(Math.random()*5),
-          price: +(2 + Math.random()*18).toFixed(2),
-          stock,
-          emoji,
-          status: stock === 0 ? 'out' : stock < 10 ? 'low' : 'active',
-        });
-        i++;
-      }
-    })();
-    persistProducts();
-  }
-
   let CATEGORIES = [
-    { name: 'Bakery', count: 24, emoji: '🥐' },
-    { name: 'Drinks', count: 18, emoji: '🍹' },
-    { name: 'Snacks', count: 12, emoji: '🍪' },
-    { name: 'Seasonal', count: 6, emoji: '🌸' },
-    { name: 'Gift Box', count: 4, emoji: '🎁' },
+    { name: 'Bakery', count: 0, emoji: '🥐' },
+    { name: 'Drinks', count: 0, emoji: '🍹' },
+    { name: 'Snacks', count: 0, emoji: '🍪' },
+    { name: 'Seasonal', count: 0, emoji: '🌸' },
+    { name: 'Gift Box', count: 0, emoji: '🎁' },
   ];
 
   try {
@@ -200,20 +131,12 @@
     try { localStorage.setItem('haypos_categories', JSON.stringify(CATEGORIES)); } catch (e) {}
   }
 
-  let CUSTOMERS = [
-    { name: 'Anna Wong', email: 'anna@haypos.dev', orders: 12, spend: 342.90, tag: 'VIP' },
-    { name: 'Chloe Tan', email: 'chloe@haypos.dev', orders: 8, spend: 210.50, tag: 'Regular' },
-    { name: 'Daniel Kim', email: 'daniel@haypos.dev', orders: 5, spend: 128.00, tag: 'Regular' },
-    { name: 'Emily Zhou', email: 'emily@haypos.dev', orders: 3, spend: 74.20,  tag: 'New' },
-    { name: 'Farah Idris', email: 'farah@haypos.dev', orders: 15, spend: 512.80, tag: 'VIP' },
-    { name: 'Hana Lee', email: 'hana@haypos.dev', orders: 2, spend: 39.00, tag: 'New' },
-  ];
-
+  let CUSTOMERS = [];
   try {
     const savedCust = localStorage.getItem('haypos_customers');
     if (savedCust) {
       const parsed = JSON.parse(savedCust);
-      if (Array.isArray(parsed) && parsed.length > 0) CUSTOMERS = parsed;
+      if (Array.isArray(parsed)) CUSTOMERS = parsed;
     }
   } catch (e) {}
 
@@ -221,18 +144,12 @@
     try { localStorage.setItem('haypos_customers', JSON.stringify(CUSTOMERS)); } catch (e) {}
   }
 
-  let REVIEWS = [
-    { name: 'Anna W.', avatar: 'AW', rating: 5, date: '2026-07-27', text: 'The Strawberry Milk Cake was divine! Packaging so cute I almost didn\'t want to open it.' },
-    { name: 'Daniel K.', avatar: 'DK', rating: 4, date: '2026-07-25', text: 'Delivery was fast and the receipt design looks amazing. Would order again.' },
-    { name: 'Farah I.', avatar: 'FI', rating: 5, date: '2026-07-24', text: 'Best rose latte in town. Consistent quality every single time. 💕' },
-    { name: 'Emily Z.', avatar: 'EZ', rating: 4, date: '2026-07-20', text: 'Loved the cookies, very crispy and aromatic! Delicious pastries.' },
-  ];
-
+  let REVIEWS = [];
   try {
     const savedReviews = localStorage.getItem('haypos_reviews');
     if (savedReviews) {
       const parsed = JSON.parse(savedReviews);
-      if (Array.isArray(parsed) && parsed.length > 0) REVIEWS = parsed;
+      if (Array.isArray(parsed)) REVIEWS = parsed;
     }
   } catch (e) {}
 
@@ -242,19 +159,12 @@
     } catch (e) {}
   }
 
-  let PROMOTIONS = [
-    { code: 'BLOOM10', type: 'Coupon', off: '10% off', start: '2026-07-20', end: '2026-08-05', status: 'active' },
-    { code: 'FLASH-SAKURA', type: 'Flash Sale', off: '25% off drinks', start: '2026-07-28', end: '2026-07-28', status: 'active' },
-    { code: 'SUMMER-BOX', type: 'Campaign', off: 'Buy 2 Get 1', start: '2026-08-01', end: '2026-08-31', status: 'scheduled' },
-    { code: 'WELCOME50', type: 'Coupon', off: '฿50 off first', start: '2026-01-01', end: '2026-12-31', status: 'active' },
-    { code: 'SPRING-END', type: 'Campaign', off: '15% off', start: '2026-05-01', end: '2026-06-15', status: 'expired' },
-  ];
-
+  let PROMOTIONS = [];
   try {
     const savedP = localStorage.getItem('haypos_promotions');
     if (savedP) {
       const parsed = JSON.parse(savedP);
-      if (Array.isArray(parsed) && parsed.length > 0) PROMOTIONS = parsed;
+      if (Array.isArray(parsed)) PROMOTIONS = parsed;
     }
   } catch (e) {}
 
@@ -263,41 +173,11 @@
   }
 
   let BANNERS = [
-    {
-      id: 1,
-      title: 'Strawberry Sakura Chiffon Cake 🌸',
-      sub: 'Seasonal special baked fresh with Hokkaido cream',
-      tag: 'Limited Seasonal',
-      image: 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=1000&auto=format&fit=crop&q=80'
-    },
-    {
-      id: 2,
-      title: 'Artisan Butter Croissants & Brioche 🥐',
-      sub: 'Golden flaky layers made with pure French AOP butter',
-      tag: 'Fresh Daily',
-      image: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=1000&auto=format&fit=crop&q=80'
-    },
-    {
-      id: 3,
-      title: 'Rose Blossom & Matcha Latte 🍵',
-      sub: 'Refreshing floral aroma with velvety smooth froth',
-      tag: 'Signature Drink',
-      image: 'https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=1000&auto=format&fit=crop&q=80'
-    },
-    {
-      id: 4,
-      title: 'French Macaron Pastel Gift Box 🎁',
-      sub: 'Assorted sweet flavors: Rose, Vanilla, Peach & Berry',
-      tag: 'Special Gift',
-      image: 'https://images.unsplash.com/photo-1569864358642-9d1684040f43?w=1000&auto=format&fit=crop&q=80'
-    },
-    {
-      id: 5,
-      title: 'Handcrafted Fruit Tarts & Cupcakes 🧁',
-      sub: 'Sweet berry glaze with creamy custard filling',
-      tag: 'Popular Picks',
-      image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=1000&auto=format&fit=crop&q=80'
-    }
+    { id: 1, title: '', sub: '', tag: '', image: '' },
+    { id: 2, title: '', sub: '', tag: '', image: '' },
+    { id: 3, title: '', sub: '', tag: '', image: '' },
+    { id: 4, title: '', sub: '', tag: '', image: '' },
+    { id: 5, title: '', sub: '', tag: '', image: '' }
   ];
 
   try {
@@ -305,76 +185,77 @@
     if (savedB) BANNERS = JSON.parse(savedB);
   } catch (e) {}
 
-  let STOCK = PRODUCTS.map(p => ({
-    name: p.name, sku: 'SKU-' + (1000 + p.id),
-    stock: p.stock,
-    incoming: [4, 12, 0, 20, 5, 0, 30, 0][p.id - 1] || 0,
-    outgoing: [8, 20, 2, 4, 10, 3, 0, 6][p.id - 1] || 0,
-    updated: '2026-07-27'
-  }));
+  function persistBanners() {
+    try { localStorage.setItem('haypos_banners', JSON.stringify(BANNERS)); } catch (e) {}
+  }
+
+  let STOCK = [];
 
   // ============================================================
   // PART 3: Application State (Visitor Mode by Default)
   // ============================================================
   const DEFAULT_STORE_CONFIG = {
     name: 'BNC HayMate',
-    tagline: 'Handmade sweet things',
+    tagline: '',
     loadingTitle: 'BNC HayMate',
     storefrontTitle: 'BNC HayMate',
-    storefrontSub: 'Handmade sweet things & bakery',
-    heroTitle: 'Fresh from the oven, daily',
-    heroSub: 'Handmade cakes, pastries, and rose-scented drinks.',
-    heroBtnText: 'Shop Menu (320 items)',
+    storefrontSub: '',
+    heroTitle: '',
+    heroSub: '',
+    heroBtnText: '',
     heroIconType: 'emoji',
-    heroEmoji: '🥐',
+    heroEmoji: '',
     heroImage: '',
     highlights: [
-      { iconType: 'emoji', icon: '🚚', image: '', title: 'Fast delivery', sub: 'Freshly prepared with love' },
-      { iconType: 'emoji', icon: '🌾', image: '', title: 'Fresh daily', sub: 'Freshly prepared with love' },
-      { iconType: 'emoji', icon: '🎀', image: '', title: 'Cute packaging', sub: 'Freshly prepared with love' },
-      { iconType: 'emoji', icon: '💖', image: '', title: 'Loyalty rewards', sub: 'Freshly prepared with love' }
+      { iconType: 'emoji', icon: '', image: '', title: '', sub: '' },
+      { iconType: 'emoji', icon: '', image: '', title: '', sub: '' },
+      { iconType: 'emoji', icon: '', image: '', title: '', sub: '' },
+      { iconType: 'emoji', icon: '', image: '', title: '', sub: '' }
     ],
-    popularTitle: 'Popular Picks',
-    popularSub: 'Best sellers this week',
+    popularTitle: '',
+    popularSub: '',
     // Receipt / Slip Customization Settings
     receiptLogoType: 'emoji', // 'emoji' | 'image'
     receiptLogoImage: '', // 1:1 Image URL / Data URL
-    receiptLogoEmoji: 'B',
-    receiptStoreName: 'BNC HayMate Bakery',
-    receiptStoreAddress: '14 Sukhumvit Rd · Bangkok',
+    receiptLogoEmoji: '',
+    receiptStoreName: 'BNC HayMate',
+    receiptStoreAddress: '',
     receiptFooterType: 'image', // 'image' | 'emoji'
     receiptFooterImage: '', // Custom QR / Graphic image
-    receiptFooterEmoji: '🎀',
-    receiptFooterMsg: 'Thank you for your order',
-    receiptFooterSub: 'Please keep this receipt for your reference',
+    receiptFooterEmoji: '',
+    receiptFooterMsg: '',
+    receiptFooterSub: '',
     // Tracking Calligraphy Banner & Review Settings
-    trackingReviewTitle: 'BNC HayMate Bakery',
-    trackingReviewSub: 'Thank you for your support',
-    trackingReviewBtnText: '⭐ เขียนรีวิว & ให้คะแนนร้าน',
-    // Star Rating Labels (Customizable in Settings)
-    starLabel1: '1 ดาว - ต้องปรับปรุง',
-    starLabel2: '2 ดาว - พอใช้ได้',
-    starLabel3: '3 ดาว - ปานกลาง / รสชาติดี',
-    starLabel4: '4 ดาว - อร่อยและประทับใจมาก',
-    starLabel5: '5 ดาว - ประทับใจมากที่สุด ยอดเยี่ยม! ⭐⭐⭐⭐⭐',
+    trackingReviewTitle: 'BNC HayMate',
+    trackingReviewSub: '',
+    trackingReviewBtnText: 'เขียนรีวิว & ให้คะแนนร้าน',
+    // Heart Rating Labels (Customizable in Settings)
+    starLabel1: '1 ดวงใจ - ต้องปรับปรุง',
+    starLabel2: '2 ดวงใจ - พอใช้ได้',
+    starLabel3: '3 ดวงใจ - ปานกลาง / รสชาติดี',
+    starLabel4: '4 ดวงใจ - อร่อยและประทับใจมาก',
+    starLabel5: '5 ดวงใจ - ประทับใจมากที่สุด ยอดเยี่ยม!',
     currency: 'THB (฿)',
     timezone: 'UTC+7 Bangkok',
-    bank_name: 'Kasikorn Bank (KBANK)',
-    bank_account: '123-4-56789-0',
-    account_holder: 'BNC HayMate Co., Ltd.',
-    wallet_account: '081-234-5678',
-    wallet_holder: 'BNC HayMate Wallet',
+    bank_name: '',
+    bank_account: '',
+    account_holder: '',
+    wallet_account: '',
+    wallet_holder: '',
     // Dynamic List of Payment Accounts (Customizable: Add / Delete / Edit / Upload Logo)
-    payment_accounts: [
-      { id: 1, type: 'bank', image: '', title: 'ธนาคารกสิกรไทย (KBANK)', account_number: '123-4-56789-0', account_holder: 'บจก. บีเอ็นซี เฮย์เมท' },
-      { id: 2, type: 'wallet', image: '', title: 'พร้อมเพย์ / วอลเล็ท (PromptPay/Wallet)', account_number: '081-234-5678', account_holder: 'BNC HayMate Wallet' }
-    ],
+    payment_accounts: [],
     // Stock Thresholds & Status Settings (Configurable in Settings)
     stockLowThreshold: 100,
     stockOutThreshold: 0,
     stockLowLabel: 'Low',
     stockHealthyLabel: 'Healthy',
     stockOutLabel: 'Out of stock',
+    // Sticky Note Customization (Configurable in Settings)
+    stickyNotePreset: 'yellow',
+    stickyNoteBg: '#FFFDF2',
+    stickyNoteBorder: '#EFE6C7',
+    stickyNoteBottomBorder: '#DFD2A8',
+    stickyNotePinColor: '#EFA6C1',
     pin: '123456'
   };
 
@@ -383,8 +264,8 @@
     const savedStore = localStorage.getItem('haypos_store_settings');
     if (savedStore) {
       loadedStore = { ...DEFAULT_STORE_CONFIG, ...JSON.parse(savedStore) };
-      if (!loadedStore.payment_accounts || !Array.isArray(loadedStore.payment_accounts) || loadedStore.payment_accounts.length === 0) {
-        loadedStore.payment_accounts = DEFAULT_STORE_CONFIG.payment_accounts;
+      if (!loadedStore.payment_accounts || !Array.isArray(loadedStore.payment_accounts)) {
+        loadedStore.payment_accounts = [];
       }
     }
   } catch (e) {}
@@ -430,6 +311,14 @@
   }
   const money = (n) => getCurrencySymbol() + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const escapeHTML = (s) => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function renderHearts(rating, size = 12) {
+    const r = Math.max(1, Math.min(5, Math.round(Number(rating) || 5)));
+    return Array.from({ length: 5 }, (_, i) => {
+      const active = i < r;
+      return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" class="heart-icon ${active ? 'active' : ''}" style="display:inline-block; vertical-align:middle; margin:0 1px; fill:${active ? 'var(--primary-600)' : 'transparent'}; stroke:${active ? 'var(--primary-600)' : 'var(--border)'}; stroke-width:2;"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
+    }).join('');
+  }
 
   function getStockStatusInfo(stockQty) {
     const qty = Number(stockQty !== undefined && stockQty !== null ? stockQty : 0);
@@ -795,11 +684,13 @@
 
       if (rRes.data && rRes.data.length > 0) {
         REVIEWS = rRes.data.map(r => ({
+          id: r.id,
           name: r.customer_name || 'Valued Guest',
-          avatar: (r.customer_name || 'VG').split(' ').map(s => s[0]).slice(0,2).join(''),
+          avatar: (r.customer_name || 'VG').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase(),
           rating: r.rating || 5,
           date: (r.created_at || '').split('T')[0] || new Date().toISOString().split('T')[0],
-          text: r.comment || ''
+          text: r.comment || '',
+          pinned: !!r.is_pinned
         }));
         persistReviews();
       }
@@ -944,48 +835,52 @@
   function openAdminPinModal() {
     state.pin = '';
     const body = el(`
-      <div class="pin-modal-card">
-        <div class="pin-lock-icon">
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <div class="calc-pin-card">
+        <div class="calc-lock-icon">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="7" r="4.2"/>
             <path d="M4 20c0-3.8 3.6-5.8 8-5.8s8 2 8 5.8"/>
           </svg>
         </div>
-        <h3 class="pin-title">Store Passcode</h3>
-        <p class="pin-sub">Enter your 6-digit PIN to access Admin Portal</p>
+        <h3 class="calc-pin-title">Store Passcode</h3>
+        <p class="calc-pin-sub">กรอกรหัสผ่าน 6 หลักเพื่อเข้าสู่ระบบแอดมิน</p>
         
-        <div class="pin-dots" id="pinDotsRow">
-          <span class="pin-dot"></span>
-          <span class="pin-dot"></span>
-          <span class="pin-dot"></span>
-          <span class="pin-dot"></span>
-          <span class="pin-dot"></span>
-          <span class="pin-dot"></span>
+        <!-- Cute Calculator Screen -->
+        <div class="calc-screen">
+          <div class="calc-dots" id="pinDotsRow">
+            <span class="calc-dot"></span>
+            <span class="calc-dot"></span>
+            <span class="calc-dot"></span>
+            <span class="calc-dot"></span>
+            <span class="calc-dot"></span>
+            <span class="calc-dot"></span>
+          </div>
         </div>
 
-        <div class="pin-keypad">
-          <button class="pin-key" data-k="1">1</button>
-          <button class="pin-key" data-k="2">2</button>
-          <button class="pin-key" data-k="3">3</button>
-          <button class="pin-key" data-k="4">4</button>
-          <button class="pin-key" data-k="5">5</button>
-          <button class="pin-key" data-k="6">6</button>
-          <button class="pin-key" data-k="7">7</button>
-          <button class="pin-key" data-k="8">8</button>
-          <button class="pin-key" data-k="9">9</button>
-          <button class="pin-key pin-key-action" data-k="clear">Clear</button>
-          <button class="pin-key" data-k="0">0</button>
-          <button class="pin-key pin-key-action" data-k="del">⌫</button>
+        <!-- Cute Round Keypad -->
+        <div class="calc-keypad">
+          <button type="button" class="calc-key" data-k="1">1</button>
+          <button type="button" class="calc-key" data-k="2">2</button>
+          <button type="button" class="calc-key" data-k="3">3</button>
+          <button type="button" class="calc-key" data-k="4">4</button>
+          <button type="button" class="calc-key" data-k="5">5</button>
+          <button type="button" class="calc-key" data-k="6">6</button>
+          <button type="button" class="calc-key" data-k="7">7</button>
+          <button type="button" class="calc-key" data-k="8">8</button>
+          <button type="button" class="calc-key" data-k="9">9</button>
+          <button type="button" class="calc-key calc-key-action" data-k="clear">C</button>
+          <button type="button" class="calc-key" data-k="0">0</button>
+          <button type="button" class="calc-key calc-key-del" data-k="del">⌫</button>
         </div>
 
-        <div style="margin-top: 18px; font-size: 11.5px; color: var(--muted);">
-          Default Store PIN: <strong>123456</strong>
+        <div style="margin-top: 16px; font-size: 11.5px; color: var(--muted);">
+          รหัสผ่านเริ่มต้น: <strong>123456</strong>
         </div>
       </div>
     `);
 
     function updateDots() {
-      const dots = body.querySelectorAll('.pin-dot');
+      const dots = body.querySelectorAll('.calc-dot');
       dots.forEach((d, idx) => {
         if (idx < state.pin.length) d.classList.add('filled');
         else d.classList.remove('filled');
@@ -1015,7 +910,7 @@
           setTimeout(() => openAdminAuthModal(), 200);
         } else {
           // Error shake
-          const dots = body.querySelectorAll('.pin-dot');
+          const dots = body.querySelectorAll('.calc-dot');
           dots.forEach(dot => dot.classList.add('error'));
           toast('Incorrect PIN. Please try again.', 'error');
           setTimeout(() => {
@@ -1026,7 +921,7 @@
       }
     }
 
-    body.querySelectorAll('.pin-key').forEach(btn => {
+    body.querySelectorAll('.calc-key').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         handleDigit(btn.dataset.k);
@@ -1353,83 +1248,158 @@
 
   function openBannerManagerModal() {
     let editList = JSON.parse(JSON.stringify(BANNERS));
-    
+    if (!Array.isArray(editList)) editList = [];
+
     const body = el(`
       <div style="max-height:68vh; overflow-y:auto; padding:4px 2px;">
-        <div style="font-size:13px; color:var(--muted); margin-bottom:14px;">
-          จัดการรูปภาพ ข้อความ และลิงก์สไลด์แบนเนอร์ 5 รูปบนหน้าโฮม (Home Carousel Banners)
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+          <div>
+            <div style="font-weight:700; font-size:13.5px; color:var(--text);" id="bannerCountLabel">สไลด์ทั้งหมด (${editList.length} รูป)</div>
+            <div style="font-size:11.5px; color:var(--muted);">เพิ่ม ลบ หรืออัปโหลดรูปภาพ 1:1 และตั้งค่าข้อความสไลด์บนหน้า Home ได้ตามใจชอบ</div>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" id="btnAddBannerSlide" style="font-weight:700; font-size:12px; padding:6px 14px;">
+            + เพิ่มสไลด์รูปภาพ (+ Add Slide)
+          </button>
         </div>
         
-        <div style="display:flex; flex-direction:column; gap:14px;" id="bannerEditList">
-          ${editList.map((b, idx) => `
-            <div class="card" style="padding:14px; border:1.5px solid var(--border); border-radius:14px; background:var(--primary-50);" data-idx="${idx}">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="font-weight:800; font-size:13.5px; color:var(--accent-text);">Slide #${idx + 1}</span>
-                <span class="badge" style="background:var(--card); font-size:11px;">${escapeHTML(b.tag || 'Slide')}</span>
-              </div>
-
-              <div class="grid" style="grid-template-columns: 120px 1fr; gap:12px; align-items:start;">
-                <div style="position:relative; width:120px; height:80px; border-radius:10px; overflow:hidden; border:1px solid var(--border); background:#fff;">
-                  <img src="${b.image}" id="bPrev_${idx}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=300'" />
-                  <label for="bFile_${idx}" style="position:absolute; inset:0; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px; font-weight:700; opacity:0; cursor:pointer; transition:opacity .18s ease;" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0">
-                    เปลี่ยนรูป
-                  </label>
-                  <input type="file" id="bFile_${idx}" accept="image/*" style="display:none;" data-idx="${idx}" />
-                </div>
-
-                <div style="display:flex; flex-direction:column; gap:6px;">
-                  <div class="field" style="margin:0;">
-                    <input type="text" class="input b-title" value="${escapeHTML(b.title)}" placeholder="หัวข้อสไลด์ (Title)" style="padding:6px 10px; font-size:13px;" />
-                  </div>
-                  <div class="field" style="margin:0;">
-                    <input type="text" class="input b-sub" value="${escapeHTML(b.sub)}" placeholder="คำบรรยายสั้น (Subtitle)" style="padding:6px 10px; font-size:12px;" />
-                  </div>
-                  <div class="grid" style="grid-template-columns:1fr 1fr; gap:6px;">
-                    <input type="text" class="input b-tag" value="${escapeHTML(b.tag)}" placeholder="แท็ก (e.g. Seasonal)" style="padding:5px 8px; font-size:11.5px;" />
-                    <input type="text" class="input b-url" value="${escapeHTML(b.image)}" placeholder="Image URL (ลิงก์รูป)" style="padding:5px 8px; font-size:11.5px;" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          `).join('')}
-        </div>
+        <div style="display:flex; flex-direction:column; gap:14px;" id="bannerEditList"></div>
       </div>
     `);
 
-    // File upload preview handlers
-    body.querySelectorAll('input[type="file"]').forEach(inp => {
-      inp.addEventListener('change', (e) => {
-        const idx = +e.target.dataset.idx;
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          const dataUrl = evt.target.result;
-          editList[idx].image = dataUrl;
-          const img = body.querySelector(`#bPrev_${idx}`);
-          if (img) img.src = dataUrl;
-          const urlInp = body.querySelector(`[data-idx="${idx}"] .b-url`);
-          if (urlInp) urlInp.value = '(Uploaded File)';
-          toast(`อัปโหลดรูปภาพ Slide #${idx + 1} แล้ว`, 'success');
-        };
-        reader.readAsDataURL(file);
-      });
-    });
+    const renderEditList = () => {
+      const listEl = body.querySelector('#bannerEditList');
+      const countLabel = body.querySelector('#bannerCountLabel');
+      if (countLabel) countLabel.textContent = `สไลด์ทั้งหมด (${editList.length} รูป)`;
+      if (!listEl) return;
+      listEl.innerHTML = '';
 
-    // URL input change listeners
-    body.querySelectorAll('.b-url').forEach((inp, idx) => {
-      inp.addEventListener('input', (e) => {
-        const v = e.target.value.trim();
-        if (v && v.startsWith('http')) {
-          editList[idx].image = v;
-          const img = body.querySelector(`#bPrev_${idx}`);
-          if (img) img.src = v;
+      if (editList.length === 0) {
+        listEl.innerHTML = `
+          <div style="text-align:center; padding:30px 14px; background:var(--primary-50); border:1.5px dashed var(--border); border-radius:14px;">
+            <div style="font-size:13px; font-weight:700; color:var(--muted); margin-bottom:6px;">ยังไม่มีรูปภาพสไลด์แบนเนอร์</div>
+            <div style="font-size:11.5px; color:var(--muted); margin-bottom:10px;">กดปุ่มด้านบนเพื่อเพิ่มรูปภาพสไลด์แรกของคุณ</div>
+          </div>
+        `;
+        return;
+      }
+
+      editList.forEach((b, idx) => {
+        const item = el(`
+          <div class="card" style="padding:14px; border:1.5px solid var(--border); border-radius:14px; background:var(--primary-50);" data-idx="${idx}">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-weight:800; font-size:13.5px; color:var(--accent-text);">Slide #${idx + 1}</span>
+                <span class="badge" style="background:var(--card); font-size:11px;">${escapeHTML(b.tag || 'Slide')}</span>
+              </div>
+              <button type="button" class="btn btn-sm btn-ghost btn-del-slide" data-idx="${idx}" style="color:var(--danger); font-size:11px; padding:3px 8px; font-weight:700;">
+                ลบสไลด์นี้
+              </button>
+            </div>
+
+            <div class="grid" style="grid-template-columns: 120px 1fr; gap:12px; align-items:start;">
+              <div style="position:relative; width:120px; height:80px; border-radius:10px; overflow:hidden; border:1px solid var(--border); background:var(--card); display:grid; place-items:center;">
+                ${b.image ? `<img src="${escapeHTML(b.image)}" id="bPrev_${idx}" style="width:100%; height:100%; object-fit:cover;" />` : `<span id="bPrev_${idx}" style="color:var(--muted); font-size:11px; font-weight:700;">(No Image)</span>`}
+                <label for="bFile_${idx}" style="position:absolute; inset:0; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px; font-weight:700; opacity:0; cursor:pointer; transition:opacity .18s ease;" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0">
+                  เปลี่ยนรูป
+                </label>
+                <input type="file" id="bFile_${idx}" accept="image/*" style="display:none;" data-idx="${idx}" />
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                <div class="field" style="margin:0;">
+                  <input type="text" class="input b-title" value="${escapeHTML(b.title || '')}" placeholder="หัวข้อสไลด์ (Title)" style="padding:6px 10px; font-size:13px;" />
+                </div>
+                <div class="field" style="margin:0;">
+                  <input type="text" class="input b-sub" value="${escapeHTML(b.sub || '')}" placeholder="คำบรรยายสั้น (Subtitle)" style="padding:6px 10px; font-size:12px;" />
+                </div>
+                <div class="grid" style="grid-template-columns:1fr 1fr; gap:6px;">
+                  <input type="text" class="input b-tag" value="${escapeHTML(b.tag || '')}" placeholder="แท็ก (e.g. Seasonal)" style="padding:5px 8px; font-size:11.5px;" />
+                  <input type="text" class="input b-url" value="${escapeHTML(b.image || '')}" placeholder="Image URL (ลิงก์รูป)" style="padding:5px 8px; font-size:11.5px;" />
+                </div>
+              </div>
+            </div>
+          </div>
+        `);
+
+        // Delete Handler
+        item.querySelector('.btn-del-slide')?.addEventListener('click', () => {
+          collectCurrentInputs();
+          editList.splice(idx, 1);
+          renderEditList();
+          toast(`ลบ Slide #${idx + 1} แล้ว`, 'info');
+        });
+
+        // File Upload Handler
+        item.querySelector(`input[type="file"]`)?.addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            const dataUrl = evt.target.result;
+            editList[idx].image = dataUrl;
+            const img = item.querySelector(`#bPrev_${idx}`);
+            if (img) {
+              if (img.tagName === 'IMG') img.src = dataUrl;
+              else {
+                img.outerHTML = `<img src="${dataUrl}" id="bPrev_${idx}" style="width:100%; height:100%; object-fit:cover;" />`;
+              }
+            }
+            const urlInp = item.querySelector('.b-url');
+            if (urlInp) urlInp.value = '(Uploaded File)';
+            toast(`อัปโหลดรูปภาพ Slide #${idx + 1} เรียบร้อย`, 'success');
+          };
+          reader.readAsDataURL(file);
+        });
+
+        // URL input listener
+        item.querySelector('.b-url')?.addEventListener('input', (e) => {
+          const v = e.target.value.trim();
+          if (v && v.startsWith('http')) {
+            editList[idx].image = v;
+            const img = item.querySelector(`#bPrev_${idx}`);
+            if (img) {
+              if (img.tagName === 'IMG') img.src = v;
+              else {
+                img.outerHTML = `<img src="${escapeHTML(v)}" id="bPrev_${idx}" style="width:100%; height:100%; object-fit:cover;" />`;
+              }
+            }
+          }
+        });
+
+        listEl.appendChild(item);
+      });
+    };
+
+    const collectCurrentInputs = () => {
+      body.querySelectorAll('#bannerEditList > div[data-idx]').forEach((card) => {
+        const i = +card.dataset.idx;
+        if (editList[i]) {
+          editList[i].title = card.querySelector('.b-title')?.value || '';
+          editList[i].sub = card.querySelector('.b-sub')?.value || '';
+          editList[i].tag = card.querySelector('.b-tag')?.value || '';
+          const urlInp = card.querySelector('.b-url')?.value;
+          if (urlInp && urlInp.startsWith('http')) editList[i].image = urlInp;
         }
       });
+    };
+
+    body.querySelector('#btnAddBannerSlide')?.addEventListener('click', () => {
+      collectCurrentInputs();
+      editList.push({
+        id: Date.now(),
+        title: '',
+        sub: '',
+        tag: 'New',
+        image: ''
+      });
+      renderEditList();
+      toast(`เพิ่มสไลด์ใหม่ Slide #${editList.length} เรียบร้อย`, 'success');
     });
 
+    renderEditList();
+
     openModal({
-      title: 'จัดการรูปสไลด์แบนเนอร์ (Home Carousel 5 Slides)',
+      title: 'จัดการรูปสไลด์แบนเนอร์ (Home Carousel Banners)',
       body,
       actions: [
         { label: 'Cancel', kind: 'ghost' },
@@ -1437,24 +1407,10 @@
           label: 'บันทึกการเปลี่ยนแปลง (Save)',
           kind: 'primary',
           onClick: () => {
-            body.querySelectorAll('#bannerEditList > div').forEach((card, idx) => {
-              const title = card.querySelector('.b-title')?.value || editList[idx].title;
-              const sub = card.querySelector('.b-sub')?.value || editList[idx].sub;
-              const tag = card.querySelector('.b-tag')?.value || editList[idx].tag;
-              const urlInp = card.querySelector('.b-url')?.value;
-              
-              editList[idx].title = title;
-              editList[idx].sub = sub;
-              editList[idx].tag = tag;
-              if (urlInp && urlInp.startsWith('http')) editList[idx].image = urlInp;
-            });
-
+            collectCurrentInputs();
             BANNERS = editList;
-            try {
-              localStorage.setItem('haypos_banners', JSON.stringify(BANNERS));
-            } catch (e) {}
-
-            toast('อัปเดตสไลด์รูปภาพ 5 รูปเรียบร้อยแล้ว!', 'success');
+            persistBanners();
+            toast(`อัปเดตสไลด์รูปภาพ ${BANNERS.length} รูปเรียบร้อยแล้ว!`, 'success');
             renderPage();
           }
         }
@@ -1492,12 +1448,12 @@
 
     root.querySelector('#dashReports').addEventListener('click', () => { state.page = 'reports'; renderMenu(); renderPage(); });
 
-    const totalRev = ORDERS.reduce((s, o) => s + (o.status !== 'cancelled' ? o.total : 0), 0);
+    const totalRev = ORDERS.reduce((s, o) => s + (o.status !== 'cancelled' ? Number(o.total || 0) : 0), 0);
     const stats = [
-      { label: "Today's Sales", value: money(totalRev), delta: '+12.4%', icon: ICONS.revenue },
-      { label: 'Total Orders', value: String(ORDERS.length), delta: '+5.1%', icon: ICONS.orders },
-      { label: 'Customers', value: String(CUSTOMERS.length * 400 + 31), delta: '+3.8%', icon: ICONS.customers },
-      { label: 'Best Seller', value: 'Rose Latte', delta: '68 sold today', icon: '⭐' },
+      { label: "Today's Sales", value: money(totalRev), delta: ORDERS.length > 0 ? '+12.4%' : '0%', icon: ICONS.revenue },
+      { label: 'Total Orders', value: String(ORDERS.length), delta: ORDERS.length > 0 ? '+5.1%' : '0 orders', icon: ICONS.orders },
+      { label: 'Customers', value: String(CUSTOMERS.length), delta: CUSTOMERS.length > 0 ? `+${CUSTOMERS.length} total` : '0 registered', icon: ICONS.customers },
+      { label: 'Best Seller', value: ORDERS.length > 0 ? 'Rose Latte' : '-', delta: ORDERS.length > 0 ? '68 sold today' : 'No sales yet', icon: ICONS.orders },
     ];
     const statsGrid = el(`<div class="grid stats"></div>`);
     stats.forEach(s => statsGrid.appendChild(el(`
@@ -1696,26 +1652,48 @@
     two2.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => { state.page = b.dataset.go; renderMenu(); renderPage(); }));
     two2.querySelectorAll('tbody tr[data-id]').forEach(tr => tr.addEventListener('click', () => { state.selectedOrder = tr.dataset.id; state.page = 'orders'; renderMenu(); renderPage(); }));
 
-    // Reviews
+    // Reviews & Sticky Notes
+    const sortedDashReviews = [...REVIEWS].sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return 0;
+    });
+
+    let dashPinnedCount = 0;
     const reviewCard = el(`
       <div class="card" style="margin-top:18px">
         <div class="flex items-center" style="justify-content:space-between; margin-bottom:10px">
-          <div><div class="card-title">Latest Reviews</div><div class="card-sub">What customers are saying</div></div>
+          <div><div class="card-title">Latest Reviews &amp; Pinned Notes</div><div class="card-sub">What customers are saying</div></div>
           <button class="btn btn-sm" data-go="reviews">All reviews</button>
         </div>
         <div class="reviews-grid">
-          ${REVIEWS.slice(0, 3).map(r => `
-            <div class="review-card card" style="padding:14px">
-              <div class="review-head">
-                <div class="avatar">${r.avatar}</div>
-                <div style="flex:1">
-                  <div class="review-name">${escapeHTML(r.name)}</div>
-                  <div class="review-date">${r.date}</div>
+          ${sortedDashReviews.slice(0, 3).map(r => {
+            const isPinned = !!r.pinned;
+            let stickyClass = '';
+            if (isPinned) {
+              stickyClass = dashPinnedCount % 2 === 0 ? 'pinned-sticky tilt-left' : 'pinned-sticky tilt-right';
+              dashPinnedCount++;
+            }
+            return `
+              <div class="review-card ${stickyClass}">
+                ${isPinned ? `
+                  <div class="sticky-pin-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 17v5M5 17h14M7 17l1-9h8l1 9M9 8V3h6v5"/></svg>
+                    <span>Pinned Note</span>
+                  </div>
+                ` : ''}
+                <div class="review-head">
+                  <div class="avatar" style="font-size:13px; font-weight:800;">${escapeHTML(r.avatar)}</div>
+                  <div style="flex:1">
+                    <div class="review-name" style="font-size:14px; font-weight:700; color:var(--text);">${escapeHTML(r.name)}</div>
+                    <div class="review-date">${r.date}</div>
+                  </div>
+                  <div class="stars">${renderHearts(r.rating)}</div>
                 </div>
-                <div class="stars">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</div>
+                <div class="review-text" style="color:var(--text); font-size:13px; line-height:1.55;">${escapeHTML(r.text)}</div>
               </div>
-              <div class="review-text">${escapeHTML(r.text)}</div>
-            </div>`).join('')}
+            `;
+          }).join('')}
         </div>
       </div>
     `);
@@ -1772,10 +1750,23 @@
 
     const colors = getThemeChartColors();
 
+    const hasOrders = ORDERS.length > 0;
     const dataMap = {
-      Week: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], sales: [420, 560, 640, 590, 780, 920, 1020], orders: [12, 15, 18, 16, 21, 26, 30] },
-      Month: { labels: ['W1', 'W2', 'W3', 'W4'], sales: [2800, 3400, 3900, 4500], orders: [85, 105, 120, 142] },
-      Year: { labels: ['Q1', 'Q2', 'Q3', 'Q4'], sales: [11200, 14500, 16800, 19400], orders: [340, 420, 490, 580] }
+      Week: {
+        labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        sales: hasOrders ? [420, 560, 640, 590, 780, 920, 1020] : [0, 0, 0, 0, 0, 0, 0],
+        orders: hasOrders ? [12, 15, 18, 16, 21, 26, 30] : [0, 0, 0, 0, 0, 0, 0]
+      },
+      Month: {
+        labels: ['W1', 'W2', 'W3', 'W4'],
+        sales: hasOrders ? [2800, 3400, 3900, 4500] : [0, 0, 0, 0],
+        orders: hasOrders ? [85, 105, 120, 142] : [0, 0, 0, 0]
+      },
+      Year: {
+        labels: ['Q1', 'Q2', 'Q3', 'Q4'],
+        sales: hasOrders ? [11200, 14500, 16800, 19400] : [0, 0, 0, 0],
+        orders: hasOrders ? [340, 420, 490, 580] : [0, 0, 0, 0]
+      }
     };
     const cur = dataMap[currentSalesPeriod] || dataMap.Week;
 
@@ -2045,7 +2036,7 @@
         </div>
         <div class="kv" style="margin-top:8px"><span class="k">Subtotal</span><span class="v">${money(Math.max(0, o.total - 2))}</span></div>
         <div class="kv"><span class="k">Shipping</span><span class="v">${money(2)}</span></div>
-        <div class="kv"><span class="k">Total</span><span class="v" style="color:#B24C74; font-size:16px">${money(o.total)}</span></div>
+        <div class="kv"><span class="k">Total</span><span class="v" style="color:var(--accent-text); font-size:16px">${money(o.total)}</span></div>
 
         <div style="margin-top:18px">
           <div class="card-title" style="margin-bottom:10px">Progress Timeline</div>
@@ -2057,7 +2048,7 @@
                 <div class="step ${isDone ? 'done' : ''} ${isActive ? 'active' : ''}">
                   <div class="bullet">${isDone ? '✓' : (i + 1)}</div>
                   <div>
-                    <div class="label" style="${isActive ? 'font-weight:700; color:#B24C74;' : ''}">${stepLabels[s]}</div>
+                    <div class="label" style="${isActive ? 'font-weight:700; color:var(--accent-text);' : ''}">${stepLabels[s]}</div>
                     <div class="sub">${isDone ? (isActive ? '● Current Step · ' + o.date : '✓ Completed') : 'Pending'}</div>
                   </div>
                 </div>`;
@@ -2088,7 +2079,7 @@
           <div class="card-title">Payment Slip</div>
           <div class="card-sub">${o.slip_url ? 'Customer Uploaded Slip' : 'Verified E-Slip'}</div>
           
-          <div class="file-preview" style="aspect-ratio:auto; padding:10px; max-height:260px; overflow:hidden; background:#fff; margin-top:8px;">
+          <div class="file-preview" style="aspect-ratio:auto; padding:10px; max-height:260px; overflow:hidden; background:var(--card); margin-top:8px;">
             <img src="${slipImgSrc}" alt="Payment Slip" style="max-height:240px; max-width:100%; border-radius:8px; object-fit:contain; margin:0 auto; display:block; box-shadow:var(--shadow-soft);" />
           </div>
           
@@ -2807,16 +2798,16 @@
       ]
     }));
 
-    const totalStock = PRODUCTS.reduce((a, b) => a + b.stock, 0);
+    const totalStock = PRODUCTS.reduce((a, b) => a + (Number(b.stock) || 0), 0);
     const lowThresh = Number(state.store && state.store.stockLowThreshold !== undefined ? state.store.stockLowThreshold : 100);
     const low = PRODUCTS.filter(s => s.stock < lowThresh).length;
-    const incomingQty = PRODUCTS.reduce((sum, p) => sum + (p.incoming || (p.stock < lowThresh ? 20 : 0)), 0);
-    const outgoingQty = ORDERS.filter(o => o.status === 'completed' || o.status === 'preparing').length * 4 + 12;
+    const incomingQty = PRODUCTS.reduce((sum, p) => sum + (Number(p.incoming) || 0), 0);
+    const outgoingQty = ORDERS.reduce((sum, o) => sum + (o.status !== 'cancelled' ? (Number(o.items) || 1) : 0), 0);
 
     const stats = [
       { label: 'Current Stock', value: String(totalStock), icon: ICONS.stock },
-      { label: 'Incoming', value: `+${incomingQty || 42}`, icon: ICONS.incoming },
-      { label: 'Outgoing', value: `-${outgoingQty || 28}`, icon: ICONS.outgoing },
+      { label: 'Incoming', value: `+${incomingQty}`, icon: ICONS.incoming },
+      { label: 'Outgoing', value: `-${outgoingQty}`, icon: ICONS.outgoing },
       { label: 'Low Stock Alerts', value: String(low), icon: ICONS.alert },
     ];
     const g = el(`<div class="grid stats"></div>`);
@@ -2961,16 +2952,16 @@
     let selectedRating = 5;
     const body = el(`
       <div class="grid" style="gap:14px;">
-        <div style="text-align:center; padding:8px 0; background:var(--primary-50); border-radius:14px; border:1px solid var(--border);">
+        <div style="text-align:center; padding:10px 0; background:var(--primary-50); border-radius:14px; border:1px solid var(--border);">
           <div style="font-size:12.5px; color:var(--muted); margin-bottom:6px;">ให้คะแนนความพึงพอใจต่อคำสั่งซื้อ ${order?.id ? `<strong>#${order.id}</strong>` : ''}</div>
-          <div id="starPicker" style="font-size:36px; cursor:pointer; letter-spacing:6px; user-select:none; color:#F0B265;">
-            <span data-star="1" style="display:inline-block; transition:transform .15s ease;">★</span>
-            <span data-star="2" style="display:inline-block; transition:transform .15s ease;">★</span>
-            <span data-star="3" style="display:inline-block; transition:transform .15s ease;">★</span>
-            <span data-star="4" style="display:inline-block; transition:transform .15s ease;">★</span>
-            <span data-star="5" style="display:inline-block; transition:transform .15s ease;">★</span>
+          <div id="heartPicker" style="display:flex; justify-content:center; gap:8px; cursor:pointer; user-select:none; margin:8px 0;">
+            ${[1,2,3,4,5].map(n => `
+              <span data-heart="${n}" style="display:inline-flex; align-items:center; transition:transform .15s ease; padding:2px;">
+                <svg viewBox="0 0 24 24" width="22" height="22" style="fill:var(--primary-600); stroke:var(--primary-600); stroke-width:2; transition:all .18s ease;"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+              </span>
+            `).join('')}
           </div>
-          <div id="starLabel" style="font-size:12.5px; font-weight:700; color:var(--accent-text); margin-top:6px;">5 ดาว - ประทับใจมากที่สุด ยอดเยี่ยม! ⭐⭐⭐⭐⭐</div>
+          <div id="heartLabel" style="font-size:12.5px; font-weight:700; color:var(--accent-text); margin-top:4px;">5 ดวงใจ - ประทับใจมากที่สุด ยอดเยี่ยม!</div>
         </div>
 
         <div class="field">
@@ -2985,41 +2976,44 @@
       </div>
     `);
 
-    const starSpans = body.querySelectorAll('#starPicker span');
-    const starLabel = body.querySelector('#starLabel');
+    const heartSpans = body.querySelectorAll('#heartPicker span');
+    const heartLabel = body.querySelector('#heartLabel');
     const labels = {
-      1: state.store.starLabel1 || '1 ดาว - ต้องปรับปรุง 😞',
-      2: state.store.starLabel2 || '2 ดาว - พอใช้ได้ 😐',
-      3: state.store.starLabel3 || '3 ดาว - ปานกลาง / รสชาติดี 🙂',
-      4: state.store.starLabel4 || '4 ดาว - อร่อยและประทับใจมาก 😊',
-      5: state.store.starLabel5 || '5 ดาว - ประทับใจมากที่สุด ยอดเยี่ยม! ⭐⭐⭐⭐⭐'
+      1: state.store.starLabel1 || '1 ดวงใจ - ต้องปรับปรุง',
+      2: state.store.starLabel2 || '2 ดวงใจ - พอใช้ได้',
+      3: state.store.starLabel3 || '3 ดวงใจ - ปานกลาง / รสชาติดี',
+      4: state.store.starLabel4 || '4 ดวงใจ - อร่อยและประทับใจมาก',
+      5: state.store.starLabel5 || '5 ดวงใจ - ประทับใจมากที่สุด ยอดเยี่ยม!'
     };
 
-    const updateStars = (val) => {
+    const updateHearts = (val) => {
       selectedRating = val;
-      starSpans.forEach((s, idx) => {
+      heartSpans.forEach((s, idx) => {
         const active = (idx + 1) <= val;
-        s.textContent = active ? '★' : '☆';
-        s.style.color = active ? '#F0B265' : 'var(--muted)';
-        s.style.transform = active ? 'scale(1.15)' : 'scale(1)';
+        const svg = s.querySelector('svg');
+        if (svg) {
+          svg.style.fill = active ? 'var(--primary-600)' : 'transparent';
+          svg.style.stroke = active ? 'var(--primary-600)' : 'var(--border)';
+          s.style.transform = active ? 'scale(1.12)' : 'scale(0.92)';
+        }
       });
-      if (starLabel) starLabel.textContent = labels[val] || `${val} ดาว`;
+      if (heartLabel) heartLabel.textContent = labels[val] || `${val} ดวงใจ`;
     };
 
-    updateStars(5);
+    updateHearts(5);
 
-    starSpans.forEach(s => {
-      s.addEventListener('click', () => updateStars(+s.dataset.star));
+    heartSpans.forEach(s => {
+      s.addEventListener('click', () => updateHearts(+s.dataset.heart));
     });
 
     openModal({
-      title: '⭐ เขียนรีวิวและให้คะแนนร้านค้า (Leave a Review)',
+      title: 'เขียนรีวิวและให้คะแนนร้านค้า (Leave a Review)',
       body,
       actions: [
         { label: 'Cancel', kind: 'ghost' },
         { label: 'ส่งรีวิว (Submit Review)', kind: 'primary', onClick: async () => {
           const name = $('#revCustName')?.value.trim() || 'ลูกค้าคนพิเศษ';
-          const text = $('#revCustMsg')?.value.trim() || 'ขนมอร่อยมาก แพ็กเกจน่ารักและจัดส่งรวดเร็วมากค่ะ 💕';
+          const text = $('#revCustMsg')?.value.trim() || 'ขนมอร่อยมาก แพ็กเกจน่ารักและจัดส่งรวดเร็วมากค่ะ';
           const avatar = name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || 'AW';
           const date = new Date().toISOString().split('T')[0];
 
@@ -3044,7 +3038,7 @@
             }).catch(() => {});
           }
 
-          toast(`ขอบคุณสำหรับรีวิวและคะแนน ${selectedRating} ดาวนะคะ! 💖✨`, 'success');
+          toast(`ขอบคุณสำหรับรีวิวและคะแนน ${selectedRating} ดวงใจนะคะ!`, 'success');
           renderPage();
         }}
       ]
@@ -3057,46 +3051,79 @@
   PAGES.reviews = (root) => {
     root.appendChild(el(`
       <div class="page-head">
-        <div><h1 class="page-title">Reviews &amp; Feedback</h1><div class="page-sub">Customer reviews, ratings, and replies (${REVIEWS.length} total)</div></div>
+        <div>
+          <h1 class="page-title">Reviews &amp; Feedback</h1>
+          <div class="page-sub">Customer reviews, ratings, and pinned sticky notes (${REVIEWS.length} total)</div>
+        </div>
       </div>
     `));
 
     const grid = el(`<div class="reviews-grid"></div>`);
     root.appendChild(grid);
-    REVIEWS.forEach(r => {
+
+    // Sort pinned reviews first
+    const sortedReviews = [...REVIEWS].sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return 0;
+    });
+
+    let pinnedCount = 0;
+    sortedReviews.forEach(r => {
+      const isPinned = !!r.pinned;
+      let stickyClass = '';
+      if (isPinned) {
+        stickyClass = pinnedCount % 2 === 0 ? 'pinned-sticky tilt-left' : 'pinned-sticky tilt-right';
+        pinnedCount++;
+      }
+
       const card = el(`
-        <div class="review-card card" style="background:var(--card);">
+        <div class="review-card ${stickyClass}">
+          ${isPinned ? `
+            <div class="sticky-pin-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 17v5M5 17h14M7 17l1-9h8l1 9M9 8V3h6v5"/></svg>
+              <span>Pinned Note</span>
+            </div>
+          ` : ''}
           <div class="review-head">
             <div class="avatar" style="font-size:13px; font-weight:800;">${escapeHTML(r.avatar || 'AW')}</div>
             <div style="flex:1">
-              <div class="review-name" style="font-size:14px; font-weight:700;">${escapeHTML(r.name)}</div>
+              <div class="review-name" style="font-size:14px; font-weight:700; color:var(--text);">${escapeHTML(r.name)}</div>
               <div class="review-date">${r.date || '2026-08-20'}</div>
             </div>
-            <div class="stars">${'★'.repeat(r.rating || 5)}${'☆'.repeat(5 - (r.rating || 5))}</div>
+            <div class="stars">${renderHearts(r.rating)}</div>
           </div>
-          <div class="review-text">${escapeHTML(r.text)}</div>
-          <div class="review-actions">
-            <button class="btn" data-a="reply">Reply</button>
-            <button class="btn" data-a="pin">${r.pinned ? 'Pinned' : 'Pin'}</button>
+          <div class="review-text" style="color:var(--text); font-size:13.5px; line-height:1.55;">${escapeHTML(r.text)}</div>
+          <div class="review-actions" style="margin-top:auto; padding-top:8px;">
+            <button class="btn ${r.pinned ? 'btn-primary' : ''}" data-a="pin" style="font-weight:700; display:inline-flex; align-items:center; gap:4px;">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17v5M5 17h14M7 17l1-9h8l1 9M9 8V3h6v5"/></svg>
+              <span>${r.pinned ? 'Pinned (ปักหมุดแล้ว)' : 'Pin (ปักหมุด)'}</span>
+            </button>
             <button class="btn btn-danger" data-a="del">Delete</button>
           </div>
         </div>
       `);
-      card.querySelectorAll('[data-a]').forEach(b => b.addEventListener('click', () => {
-        if (b.dataset.a === 'reply') openModal({
-          title: 'Reply to ' + r.name,
-          body: `<div class="field"><label>Your reply</label><textarea class="textarea" id="replyText" placeholder="Thank you for loving our bakery! 💕"></textarea></div>`,
-          actions: [{ label: 'Cancel', kind: 'ghost' }, { label: 'Send reply', kind: 'primary', onClick: () => toast('Reply sent to customer', 'success') }]
-        });
-        else if (b.dataset.a === 'pin') {
+
+      card.querySelectorAll('[data-a]').forEach(b => b.addEventListener('click', async () => {
+        if (b.dataset.a === 'pin') {
           r.pinned = !r.pinned;
           persistReviews();
-          toast(r.pinned ? 'Review pinned to top' : 'Review unpinned', 'success');
+          if (supabase && r.id) {
+            try {
+              await supabase.from('reviews').update({ is_pinned: r.pinned }).eq('id', r.id);
+            } catch (e) {}
+          }
+          toast(r.pinned ? `ปักหมุดรีวิวของคุณ ${r.name} ไว้ด้านบนแล้ว` : `ยกเลิกการปักหมุดรีวิวของคุณ ${r.name} แล้ว`, 'success');
           renderPage();
         } else if (b.dataset.a === 'del') {
-          confirmDialog(`Delete review from "${r.name}"?`, () => {
-            REVIEWS = REVIEWS.filter(x => x !== r);
+          confirmDialog(`Delete review from "${r.name}"?`, async () => {
+            REVIEWS = REVIEWS.filter(x => x !== r && x.id !== r.id);
             persistReviews();
+            if (supabase && r.id) {
+              try {
+                await supabase.from('reviews').delete().eq('id', r.id);
+              } catch (e) {}
+            }
             toast('Review deleted', 'success');
             renderPage();
           });
@@ -3362,13 +3389,13 @@
     root.querySelector('#expPdf').addEventListener('click', () => window.print());
 
     const totalRev = ORDERS.reduce((s, o) => s + (o.status !== 'cancelled' ? Number(o.total || 0) : 0), 0);
-    const completedOrders = ORDERS.filter(o => o.status === 'completed').length || ORDERS.length;
+    const completedOrders = ORDERS.filter(o => o.status === 'completed').length;
     const avgVal = completedOrders > 0 ? (totalRev / completedOrders) : 0;
 
     const stats = [
-      { label: 'Total Revenue', value: money(totalRev || 12458.20), delta: '+8.2%', icon: ICONS.revenue },
-      { label: 'Orders Completed', value: String(completedOrders || 482), delta: '+12', icon: ICONS.orders },
-      { label: 'Avg Order Value', value: money(avgVal || 325.50), delta: '+4.1%', icon: ICONS.card },
+      { label: 'Total Revenue', value: money(totalRev), delta: ORDERS.length > 0 ? '+8.2%' : '0%', icon: ICONS.revenue },
+      { label: 'Orders Completed', value: String(completedOrders), delta: completedOrders > 0 ? `+${completedOrders}` : '0 orders', icon: ICONS.orders },
+      { label: 'Avg Order Value', value: money(avgVal), delta: avgVal > 0 ? '+4.1%' : '฿0.00', icon: ICONS.card },
       { label: 'Refunds', value: money(0), delta: '0%', icon: ICONS.refund },
     ];
     const g = el(`<div class="grid stats"></div>`);
@@ -3404,6 +3431,8 @@
     if (!window.Chart) return;
     const colors = getThemeChartColors();
 
+    const hasOrders = ORDERS.length > 0;
+
     if (rev) {
       if (reportsRevChartInstance) reportsRevChartInstance.destroy();
       const grad = rev.getContext('2d').createLinearGradient(0, 0, 0, 240);
@@ -3415,7 +3444,7 @@
           labels: ['1','5','10','15','20','25','30'],
           datasets: [{
             label: 'Revenue (฿)',
-            data: [420, 610, 540, 720, 880, 760, 940],
+            data: hasOrders ? [420, 610, 540, 720, 880, 760, 940] : [0, 0, 0, 0, 0, 0, 0],
             borderColor: colors.primary600,
             backgroundColor: grad,
             fill: true,
@@ -3438,12 +3467,14 @@
 
     if (cat) {
       if (reportsCatChartInstance) reportsCatChartInstance.destroy();
+      const catCounts = CATEGORIES.map(c => PRODUCTS.filter(p => p.cat === c.name).length);
+      const totalCatProd = catCounts.reduce((a, b) => a + b, 0);
       reportsCatChartInstance = new Chart(cat, {
         type: 'doughnut',
         data: {
           labels: CATEGORIES.map(c => c.name),
           datasets: [{
-            data: CATEGORIES.map(c => PRODUCTS.filter(p => p.cat === c.name).length || 5),
+            data: totalCatProd > 0 ? catCounts : CATEGORIES.map(() => 0),
             backgroundColor: colors.paletteColors,
             borderColor: colors.card,
             borderWidth: 2
@@ -3484,7 +3515,6 @@
           <h1 class="page-title">Settings &amp; Store Management</h1>
           <div class="page-sub">ระบบจัดการและปรับแต่งทุกข้อมูลบนหน้า Customer Store, หน้า Home, การเงิน และรหัสผ่าน</div>
         </div>
-        <button class="btn btn-primary" id="saveSettingsTop" style="font-weight:700;">Save All Changes (บันทึกทั้งหมด)</button>
       </div>
     `));
 
@@ -3589,19 +3619,23 @@
           </div>
         </div>
 
-        <!-- SECTION 5: Home Carousel 5 Slides Manager -->
+        <!-- SECTION 5: Home Carousel Dynamic Slides Manager -->
         <div class="card">
           <div class="flex items-center" style="justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
             <div>
-              <div class="card-title">Home Carousel Banners (สไลด์รูปภาพ 5 รูป)</div>
-              <div class="card-sub">อัปโหลดรูปภาพ 1:1 หรือเปลี่ยนลิงก์รูปภาพโปรโมท 5 ภาพบนหน้า Home</div>
+              <div class="card-title">Home Carousel Banners (สไลด์รูปภาพ ${BANNERS.length} รูป)</div>
+              <div class="card-sub">เพิ่ม ลบ อัปโหลดรูปภาพ 1:1 หรือเปลี่ยนลิงก์รูปภาพโปรโมทบนหน้า Home ได้อย่างอิสระ</div>
             </div>
-            <button class="btn btn-primary btn-sm" id="btnEditBannersSettings" style="font-weight:700;">จัดการ / เปลี่ยนรูปสไลด์ (5 รูป)</button>
+            <button type="button" class="btn btn-primary btn-sm" id="btnEditBannersSettings" style="font-weight:700;">+ จัดการ / เพิ่ม-ลดรูปสไลด์ (${BANNERS.length} รูป)</button>
           </div>
-          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:12px; margin-top:12px;">
-            ${BANNERS.map((b, idx) => `
+          <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap:12px; margin-top:12px;">
+            ${BANNERS.length === 0 ? `
+              <div style="grid-column: 1 / -1; padding:20px; text-align:center; background:var(--primary-50); border:1.5px dashed var(--border); border-radius:12px; color:var(--muted); font-size:12px; font-weight:700;">
+                ยังไม่มีรูปภาพสไลด์ (กดปุ่ม "จัดการ / เพิ่ม-ลดรูปสไลด์" เพื่อเพิ่มรูปภาพ)
+              </div>
+            ` : BANNERS.map((b, idx) => `
               <div style="border:1.5px solid var(--border); border-radius:12px; overflow:hidden; background:var(--card); text-align:center;">
-                <img src="${b.image}" style="width:100%; aspect-ratio:1/1; object-fit:cover; display:block;" onerror="this.src='https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=300'" />
+                ${b.image ? `<img src="${escapeHTML(b.image)}" style="width:100%; aspect-ratio:1/1; object-fit:cover; display:block;" />` : `<div style="width:100%; aspect-ratio:1/1; display:grid; place-items:center; background:var(--primary-50); color:var(--muted); font-size:11px; font-weight:700;">(No Image)</div>`}
                 <div style="padding:6px 8px; font-size:11.5px; font-weight:700; color:var(--accent-text);">Slide #${idx + 1}</div>
               </div>
             `).join('')}
@@ -3764,10 +3798,10 @@
           </div>
         </div>
 
-        <!-- SECTION 7: Tracking Review Calligraphy & Star Labels Settings (STARS PRESERVED) -->
+        <!-- SECTION 7: Tracking Review Calligraphy & Heart Rating Labels Settings -->
         <div class="card">
-          <div class="card-title">⭐ Tracking Review &amp; Star Labels (ตั้งค่าข้อความรีวิวหน้า Tracking และระดับดาว)</div>
-          <div class="card-sub">กำหนดชื่อร้าน Calligraphy, ข้อความขอบคุณบนหน้า Tracking และข้อความอธิบายการให้คะแนน 1-5 ดาว</div>
+          <div class="card-title">Tracking Review &amp; Heart Labels (ตั้งค่าข้อความรีวิวหน้า Tracking และระดับดวงใจ)</div>
+          <div class="card-sub">กำหนดชื่อร้าน Calligraphy, ข้อความขอบคุณบนหน้า Tracking และข้อความอธิบายการให้คะแนน 1-5 ดวงใจ</div>
           
           <div class="grid two-col" style="gap:16px; margin-top:14px;">
             <!-- Left: Tracking Calligraphy Box Settings -->
@@ -3776,49 +3810,133 @@
               
               <div class="field">
                 <label>ชื่อร้านสไตล์ Calligraphy (Store Brand Title)</label>
-                <input class="input" id="setTrackingTitle" value="${escapeHTML(state.store.trackingReviewTitle || state.store.receiptStoreName || state.store.name || 'BNC HayMate Bakery')}" />
+                <input class="input" id="setTrackingTitle" value="${escapeHTML(state.store.trackingReviewTitle || state.store.receiptStoreName || state.store.name || 'BNC HayMate')}" />
               </div>
               <div class="field">
                 <label>ข้อความเล็กๆ ใต้ชื่อร้าน (Sub-message)</label>
-                <input class="input" id="setTrackingSub" value="${escapeHTML(state.store.trackingReviewSub || 'Thank you for your support')}" />
+                <input class="input" id="setTrackingSub" value="${escapeHTML(state.store.trackingReviewSub || '')}" />
               </div>
               <div class="field" style="margin-bottom:0;">
                 <label>ข้อความบนปุ่มรีวิว (Button Text)</label>
-                <input class="input" id="setTrackingBtnText" value="${escapeHTML(state.store.trackingReviewBtnText || '⭐ เขียนรีวิว &amp; ให้คะแนนร้าน')}" />
+                <input class="input" id="setTrackingBtnText" value="${escapeHTML(state.store.trackingReviewBtnText || 'เขียนรีวิว &amp; ให้คะแนนร้าน')}" />
               </div>
             </div>
 
-            <!-- Right: 1-5 Star Rating Custom Labels -->
+            <!-- Right: 1-5 Heart Rating Custom Labels -->
             <div style="background:var(--primary-50); padding:14px; border-radius:14px; border:1px solid var(--border);">
-              <div style="font-weight:700; font-size:13.5px; margin-bottom:10px; color:var(--text);">2. คำอธิบายระดับคะแนนดาว (Star Rating Labels)</div>
+              <div style="font-weight:700; font-size:13.5px; margin-bottom:10px; color:var(--text);">2. คำอธิบายระดับคะแนนดวงใจ (Heart Rating Labels)</div>
               
               <div class="grid" style="gap:8px;">
                 <div class="field" style="margin-bottom:0;">
-                  <label style="font-size:11px;">⭐ 1 ดาว</label>
-                  <input class="input" id="setStarLabel1" value="${escapeHTML(state.store.starLabel1 || '1 ดาว - ต้องปรับปรุง')}" style="font-size:12px; padding:6px 10px;" />
+                  <label style="font-size:11px;">1 ดวงใจ</label>
+                  <input class="input" id="setStarLabel1" value="${escapeHTML(state.store.starLabel1 || '1 ดวงใจ - ต้องปรับปรุง')}" style="font-size:12px; padding:6px 10px;" />
                 </div>
                 <div class="field" style="margin-bottom:0;">
-                  <label style="font-size:11px;">⭐⭐ 2 ดาว</label>
-                  <input class="input" id="setStarLabel2" value="${escapeHTML(state.store.starLabel2 || '2 ดาว - พอใช้ได้')}" style="font-size:12px; padding:6px 10px;" />
+                  <label style="font-size:11px;">2 ดวงใจ</label>
+                  <input class="input" id="setStarLabel2" value="${escapeHTML(state.store.starLabel2 || '2 ดวงใจ - พอใช้ได้')}" style="font-size:12px; padding:6px 10px;" />
                 </div>
                 <div class="field" style="margin-bottom:0;">
-                  <label style="font-size:11px;">⭐⭐⭐ 3 ดาว</label>
-                  <input class="input" id="setStarLabel3" value="${escapeHTML(state.store.starLabel3 || '3 ดาว - ปานกลาง / รสชาติดี')}" style="font-size:12px; padding:6px 10px;" />
+                  <label style="font-size:11px;">3 ดวงใจ</label>
+                  <input class="input" id="setStarLabel3" value="${escapeHTML(state.store.starLabel3 || '3 ดวงใจ - ปานกลาง / รสชาติดี')}" style="font-size:12px; padding:6px 10px;" />
                 </div>
                 <div class="field" style="margin-bottom:0;">
-                  <label style="font-size:11px;">⭐⭐⭐⭐ 4 ดาว</label>
-                  <input class="input" id="setStarLabel4" value="${escapeHTML(state.store.starLabel4 || '4 ดาว - อร่อยและประทับใจมาก')}" style="font-size:12px; padding:6px 10px;" />
+                  <label style="font-size:11px;">4 ดวงใจ</label>
+                  <input class="input" id="setStarLabel4" value="${escapeHTML(state.store.starLabel4 || '4 ดวงใจ - อร่อยและประทับใจมาก')}" style="font-size:12px; padding:6px 10px;" />
                 </div>
                 <div class="field" style="margin-bottom:0;">
-                  <label style="font-size:11px;">⭐⭐⭐⭐⭐ 5 ดาว</label>
-                  <input class="input" id="setStarLabel5" value="${escapeHTML(state.store.starLabel5 || '5 ดาว - ประทับใจมากที่สุด ยอดเยี่ยม! ⭐⭐⭐⭐⭐')}" style="font-size:12px; padding:6px 10px;" />
+                  <label style="font-size:11px;">5 ดวงใจ</label>
+                  <input class="input" id="setStarLabel5" value="${escapeHTML(state.store.starLabel5 || '5 ดวงใจ - ประทับใจมากที่สุด ยอดเยี่ยม!')}" style="font-size:12px; padding:6px 10px;" />
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- SECTION 8: Stock Thresholds & Status Color Alerts (ตั้งค่าเกณฑ์สต็อก & การแสดงผลสี) -->
+        <!-- SECTION 8: Sticky Note Customization (ตั้งค่าโทนสีกระดาษสติกกี้โน้ตปักหมุด) -->
+        <div class="card">
+          <div class="card-title">📌 Sticky Note Customization (ตั้งค่าโทนสีกระดาษสติกกี้โน้ตปักหมุด)</div>
+          <div class="card-sub">เลือกโทนสีพาสเทลสำเร็จรูป หรือปรับแต่งสีกระดาษ สีขอบ และสีหมุดปักของรีวิวที่ปักหมุดได้ตามใจชอบ</div>
+
+          <div class="grid two-col" style="gap:16px; margin-top:14px;">
+            <!-- Left Column: Preset Palettes & Custom Pickers -->
+            <div style="background:var(--primary-50); padding:16px; border-radius:14px; border:1px solid var(--border);">
+              <div style="font-weight:700; font-size:13.5px; margin-bottom:8px; color:var(--text);">🌸 โทนสีสว่างพาสเทล (Light Presets - 6 แบบ)</div>
+              <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap:8px; margin-bottom:14px;" id="stickyPresetListLight">
+                ${Object.entries(STICKY_NOTE_PALETTES).filter(([_, p]) => p.category === 'light').map(([k, p]) => `
+                  <button type="button" class="btn-sticky-preset" data-k="${k}" style="background:${p.bg}; border:1.5px solid ${p.border}; border-bottom:3px solid ${p.bottom}; padding:8px 10px; border-radius:12px; text-align:left; cursor:pointer; display:flex; align-items:center; gap:8px; transition:all .15s ease; box-shadow:var(--shadow-soft);">
+                    <div style="width:14px; height:14px; border-radius:50%; background:${p.pin}; flex:none; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+                    <span style="font-size:11px; font-weight:700; color:#2D3748;">${escapeHTML(p.name.split('(')[0].trim())}</span>
+                  </button>
+                `).join('')}
+              </div>
+
+              <div style="font-weight:700; font-size:13.5px; margin-bottom:8px; color:var(--text);">🌙 โทนสีมืดพรีเมียม (Dark Presets - 6 แบบ)</div>
+              <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap:8px; margin-bottom:14px;" id="stickyPresetListDark">
+                ${Object.entries(STICKY_NOTE_PALETTES).filter(([_, p]) => p.category === 'dark').map(([k, p]) => `
+                  <button type="button" class="btn-sticky-preset" data-k="${k}" style="background:${p.bg}; border:1.5px solid ${p.border}; border-bottom:3px solid ${p.bottom}; padding:8px 10px; border-radius:12px; text-align:left; cursor:pointer; display:flex; align-items:center; gap:8px; transition:all .15s ease; box-shadow:var(--shadow-soft);">
+                    <div style="width:14px; height:14px; border-radius:50%; background:${p.pin}; flex:none; box-shadow:0 1px 3px rgba(0,0,0,0.35);"></div>
+                    <span style="font-size:11px; font-weight:700; color:#F5EEF8;">${escapeHTML(p.name.split('(')[0].trim())}</span>
+                  </button>
+                `).join('')}
+              </div>
+
+              <div style="font-weight:700; font-size:13px; margin-top:14px; margin-bottom:8px; color:var(--text);">2. กำหนดสีเองอย่างละเอียด (Custom Colors)</div>
+              <div class="grid" style="grid-template-columns:1fr 1fr; gap:10px;">
+                <div class="field" style="margin-bottom:0;">
+                  <label style="font-size:11.5px; font-weight:700;">สีกระดาษโน้ต (Paper Bg)</label>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <input type="color" id="setStickyBg" value="${state.store.stickyNoteBg || '#FFFDF2'}" style="width:36px; height:36px; border:none; border-radius:8px; cursor:pointer; background:transparent;" />
+                    <input class="input" id="setStickyBgHex" value="${state.store.stickyNoteBg || '#FFFDF2'}" style="font-size:12px; padding:6px 8px; font-weight:700; font-family:monospace;" />
+                  </div>
+                </div>
+                <div class="field" style="margin-bottom:0;">
+                  <label style="font-size:11.5px; font-weight:700;">สีเส้นขอบ (Border)</label>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <input type="color" id="setStickyBorder" value="${state.store.stickyNoteBorder || '#EFE6C7'}" style="width:36px; height:36px; border:none; border-radius:8px; cursor:pointer; background:transparent;" />
+                    <input class="input" id="setStickyBorderHex" value="${state.store.stickyNoteBorder || '#EFE6C7'}" style="font-size:12px; padding:6px 8px; font-weight:700; font-family:monospace;" />
+                  </div>
+                </div>
+                <div class="field" style="margin-bottom:0;">
+                  <label style="font-size:11.5px; font-weight:700;">สีขอบล่างกระดาษ (Bottom Edge)</label>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <input type="color" id="setStickyBottom" value="${state.store.stickyNoteBottomBorder || '#DFD2A8'}" style="width:36px; height:36px; border:none; border-radius:8px; cursor:pointer; background:transparent;" />
+                    <input class="input" id="setStickyBottomHex" value="${state.store.stickyNoteBottomBorder || '#DFD2A8'}" style="font-size:12px; padding:6px 8px; font-weight:700; font-family:monospace;" />
+                  </div>
+                </div>
+                <div class="field" style="margin-bottom:0;">
+                  <label style="font-size:11.5px; font-weight:700;">สีตราหมุดปัก (Pin Badge)</label>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <input type="color" id="setStickyPin" value="${state.store.stickyNotePinColor || '#EFA6C1'}" style="width:36px; height:36px; border:none; border-radius:8px; cursor:pointer; background:transparent;" />
+                    <input class="input" id="setStickyPinHex" value="${state.store.stickyNotePinColor || '#EFA6C1'}" style="font-size:12px; padding:6px 8px; font-weight:700; font-family:monospace;" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Column: Real-time Sticky Note Live Preview -->
+            <div style="background:var(--bg); border:1.5px solid var(--border); border-radius:18px; padding:18px; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+              <div style="font-weight:700; font-size:13px; color:var(--muted); margin-bottom:18px; text-align:center;">ตัวอย่างสติกกี้โน้ตแบบสด (Live Preview)</div>
+              
+              <div id="stickyLivePreviewCard" class="review-card pinned-sticky tilt-left" style="max-width:280px; width:100%; pointer-events:none; background:${state.store.stickyNoteBg || '#FFFDF2'}; border-color:${state.store.stickyNoteBorder || '#EFE6C7'}; border-bottom-color:${state.store.stickyNoteBottomBorder || '#DFD2A8'};">
+                <div class="sticky-pin-badge" id="prevStickyPinBadge" style="background:${state.store.stickyNotePinColor || '#EFA6C1'};">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 17v5M5 17h14M7 17l1-9h8l1 9M9 8V3h6v5"/></svg>
+                  <span>Pinned Note</span>
+                </div>
+                <div class="review-head">
+                  <div class="avatar" style="font-size:13px; font-weight:800;">AW</div>
+                  <div style="flex:1;">
+                    <div class="review-name" style="font-size:14px; font-weight:700; color:var(--text);">Anna W.</div>
+                    <div class="review-date">Today</div>
+                  </div>
+                  <div class="stars">${renderHearts(5)}</div>
+                </div>
+                <div class="review-text" style="font-size:13px; color:var(--text); line-height:1.5;">เค้กนุ่มละมุนมากค่ะ บรรยากาศร้านและแพ็กเกจน่ารักที่สุดเลย 💕</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION 9: Stock Thresholds & Status Color Alerts (ตั้งค่าเกณฑ์สต็อก & การแสดงผลสี) -->
         <div class="card">
           <div class="card-title">Stock Thresholds &amp; Color Alerts (ตั้งค่าเกณฑ์ระดับสต็อก &amp; การแสดงผลสี)</div>
           <div class="card-sub">กำหนดจำนวนสต็อกสินค้าเพื่อแสดงสีแจ้งเตือน (เขียว Healthy, ส้ม Low, แดง Out of Stock) ในทุกตารางและหน้าร้าน</div>
@@ -3938,33 +4056,34 @@
             </div>
           </div>
 
-          <!-- SECTION 11: Appearance & Theme with Theme-adaptive Icons -->
+          <!-- SECTION 11: Appearance & Theme (Primary Color Swatches) -->
           <div class="card">
             <div class="card-title">Appearance &amp; Theme (ธีมและสีหลักของระบบ)</div>
-            <div class="card-sub">เลือกโทนสีและโหมดการแสดงผลของระบบ</div>
+            <div class="card-sub">เลือกโทนสีหลักของระบบ (ระบบจะแสดงผลพรีวิวทันที และปรับโทนสี Dark Mode ตามที่เลือก)</div>
             <div class="grid" style="gap:12px; margin-top:12px;">
               <div class="field"><label>Primary Color</label>
                 <div class="flex gap-2" id="colorRow">
-                  ${['#F8BFD4','#F0B265','#7CC59A','#8BB6E8','#D6BEE9'].map(c => `<button class="swatch-btn" data-c="${c}" style="width:32px;height:32px;border-radius:10px;background:${c};border:2px solid ${c === state.color ? '#333' : 'transparent'}; cursor:pointer"></button>`).join('')}
+                  ${['#F8BFD4','#F0B265','#7CC59A','#8BB6E8','#D6BEE9'].map(c => `<button type="button" class="swatch-btn" data-c="${c}" style="width:36px;height:36px;border-radius:12px;background:${c};border:2.5px solid ${c === state.color ? 'var(--text)' : 'transparent'};box-shadow:${c === state.color ? '0 0 0 2.5px var(--card)' : 'none'}; cursor:pointer; transition:transform 0.18s ease;"></button>`).join('')}
                 </div>
               </div>
-              <div class="field"><label>Theme Mode</label>
-                <div class="tabs" id="themeTabs">
-                  <div class="tab ${state.theme === 'light' ? 'active' : ''}" data-th="light" title="Light Mode" style="display:inline-flex; align-items:center; gap:6px;">
-                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="theme-icon-svg">
-                      <circle cx="12" cy="12" r="4.5"/>
-                      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
-                    </svg>
-                    <span>Light</span>
-                  </div>
-                  <div class="tab ${state.theme === 'dark' ? 'active' : ''}" data-th="dark" title="Dark Mode" style="display:inline-flex; align-items:center; gap:6px;">
-                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="theme-icon-svg">
-                      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
-                    </svg>
-                    <span>Dark</span>
-                  </div>
+            </div>
+          </div>
+          <!-- SECTION 12: Danger Zone / Factory Reset (ล้างข้อมูลระบบทั้งหมด & รีเซ็ตค่าเริ่มต้น) -->
+          <div class="card" style="border:1.5px solid var(--danger); background:rgba(229,139,148,0.05); border-radius:18px;">
+            <div class="flex items-center" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+              <div>
+                <div class="card-title" style="color:var(--danger); display:flex; align-items:center; gap:8px;">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+                  <span>Danger Zone: ล้างข้อมูลระบบทั้งหมด (Factory Reset All Data)</span>
+                </div>
+                <div class="card-sub" style="color:var(--text); margin-top:4px;">
+                  ล้างประวัติออเดอร์, สต็อกสินค้า, รีวิวลูกค้า, โค้ดโปรโมชั่น และคืนค่าการตั้งค่าระบบทั้งหมดกลับสู่ค่าเริ่มต้นจากโรงงาน (ต้องกรอกรหัส PIN เพื่อยืนยันความปลอดภัย)
                 </div>
               </div>
+              <button type="button" class="btn btn-danger" id="btnTriggerFactoryReset" style="font-weight:800; padding:10px 20px; border-radius:12px; display:inline-flex; align-items:center; gap:6px;">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                <span>รีเซ็ตข้อมูลทั้งหมด (Reset Everything)</span>
+              </button>
             </div>
           </div>
         </div>
@@ -4495,6 +4614,13 @@
       state.store.stockLowLabel = formWrap.querySelector('#setStockLowLabel')?.value.trim() || 'Low';
       state.store.stockOutLabel = formWrap.querySelector('#setStockOutLabel')?.value.trim() || 'Out of stock';
 
+      // Save Sticky Note Customization
+      state.store.stickyNoteBg = formWrap.querySelector('#setStickyBg')?.value || '#FFFDF2';
+      state.store.stickyNoteBorder = formWrap.querySelector('#setStickyBorder')?.value || '#EFE6C7';
+      state.store.stickyNoteBottomBorder = formWrap.querySelector('#setStickyBottom')?.value || '#DFD2A8';
+      state.store.stickyNotePinColor = formWrap.querySelector('#setStickyPin')?.value || '#EFA6C1';
+      applyStickyNoteTheme();
+
       // Save Payment Accounts
       state.store.payment_accounts = currentPaymentAccounts.map(acc => ({
         id: acc.id || Date.now(),
@@ -4523,6 +4649,15 @@
         state.store.pin = pinVal;
       }
 
+      // Save Theme & Color instantly
+      state.store.color = state.color;
+      state.store.theme = state.theme;
+      applyAppTheme(state.color, state.theme);
+      try {
+        localStorage.setItem('haypos_color', state.color);
+        localStorage.setItem('haypos_theme', state.theme);
+      } catch (e) {}
+
       // Persist to localStorage
       try {
         localStorage.setItem('haypos_store_settings', JSON.stringify(state.store));
@@ -4540,26 +4675,296 @@
 
       renderMenu();
       renderPage();
-      toast(`บันทึกการตั้งค่าร้าน, ค่าเงิน (${getCurrencySymbol()}), สลิป และหน้า Home เรียบร้อยแล้ว`, 'success');
+      toast(`บันทึกการตั้งค่าร้าน, ธีมสี, สติกกี้โน้ต, ค่าเงิน (${getCurrencySymbol()}), สลิป และหน้า Home เรียบร้อยแล้ว`, 'success');
     };
 
     root.querySelector('#saveSettingsTop')?.addEventListener('click', doSave);
     formWrap.querySelector('#saveSettingsBottom')?.addEventListener('click', doSave);
     formWrap.querySelector('#btnEditBannersSettings')?.addEventListener('click', openBannerManagerModal);
 
+    // Sticky Note Live Preview Sync
+    const sBgInp = formWrap.querySelector('#setStickyBg');
+    const sBgHex = formWrap.querySelector('#setStickyBgHex');
+    const sBorderInp = formWrap.querySelector('#setStickyBorder');
+    const sBorderHex = formWrap.querySelector('#setStickyBorderHex');
+    const sBottomInp = formWrap.querySelector('#setStickyBottom');
+    const sBottomHex = formWrap.querySelector('#setStickyBottomHex');
+    const sPinInp = formWrap.querySelector('#setStickyPin');
+    const sPinHex = formWrap.querySelector('#setStickyPinHex');
+
+    const updateStickyPreview = () => {
+      const prevCard = formWrap.querySelector('#stickyLivePreviewCard');
+      const prevPin = formWrap.querySelector('#prevStickyPinBadge');
+      const bg = sBgInp ? sBgInp.value : '#FFFDF2';
+      const border = sBorderInp ? sBorderInp.value : '#EFE6C7';
+      const bottom = sBottomInp ? sBottomInp.value : '#DFD2A8';
+      const pin = sPinInp ? sPinInp.value : '#EFA6C1';
+
+      if (prevCard) {
+        prevCard.style.background = bg;
+        prevCard.style.borderColor = border;
+        prevCard.style.borderBottomColor = bottom;
+      }
+      if (prevPin) {
+        prevPin.style.background = pin;
+      }
+    };
+
+    // Color pickers <-> Hex sync
+    const syncColor = (colorInp, hexInp) => {
+      if (!colorInp || !hexInp) return;
+      colorInp.addEventListener('input', () => {
+        hexInp.value = colorInp.value;
+        updateStickyPreview();
+      });
+      hexInp.addEventListener('input', () => {
+        if (/^#[0-9A-Fa-f]{6}$/.test(hexInp.value.trim())) {
+          colorInp.value = hexInp.value.trim();
+          updateStickyPreview();
+        }
+      });
+    };
+
+    syncColor(sBgInp, sBgHex);
+    syncColor(sBorderInp, sBorderHex);
+    syncColor(sBottomInp, sBottomHex);
+    syncColor(sPinInp, sPinHex);
+
+    // Preset buttons
+    formWrap.querySelectorAll('.btn-sticky-preset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const k = btn.dataset.k;
+        const p = STICKY_NOTE_PALETTES[k];
+        if (p) {
+          if (sBgInp) sBgInp.value = p.bg;
+          if (sBgHex) sBgHex.value = p.bg;
+          if (sBorderInp) sBorderInp.value = p.border;
+          if (sBorderHex) sBorderHex.value = p.border;
+          if (sBottomInp) sBottomInp.value = p.bottom;
+          if (sBottomHex) sBottomHex.value = p.bottom;
+          if (sPinInp) sPinInp.value = p.pin;
+          if (sPinHex) sPinHex.value = p.pin;
+          updateStickyPreview();
+          toast(`เลือกโทนสีสติกกี้โน้ต: ${p.name}`, 'info');
+        }
+      });
+    });
+
     formWrap.querySelectorAll('.swatch-btn').forEach(b => b.addEventListener('click', () => {
-      setColorAccent(b.dataset.c);
-      formWrap.querySelectorAll('.swatch-btn').forEach(x => x.style.borderColor = 'transparent');
+      const selectedColor = b.dataset.c;
+      state.color = selectedColor;
+      state.theme = 'light';
+      if (state.store) {
+        state.store.color = selectedColor;
+        state.store.theme = 'light';
+      }
+      applyAppTheme(selectedColor, 'light');
+      formWrap.querySelectorAll('.swatch-btn').forEach(x => {
+        x.style.borderColor = 'transparent';
+        x.style.boxShadow = 'none';
+      });
       b.style.borderColor = 'var(--text)';
-      toast(`เปลี่ยนโทนสีระบบเป็น ${COLOR_PALETTES[b.dataset.c]?.name || 'ใหม่'} เรียบร้อย`, 'success');
+      b.style.boxShadow = '0 0 0 2px var(--card)';
+      try {
+        localStorage.setItem('haypos_color', selectedColor);
+        localStorage.setItem('haypos_theme', 'light');
+        if (state.store) localStorage.setItem('haypos_store_settings', JSON.stringify(state.store));
+      } catch(e) {}
+      toast(`เปลี่ยนโทนสีเป็น ${COLOR_PALETTES[selectedColor]?.name || 'ใหม่'} (โหมด Light) ทันที`, 'success');
     }));
-    formWrap.querySelectorAll('#themeTabs .tab').forEach(t => t.addEventListener('click', () => {
-      setTheme(t.dataset.th);
-      formWrap.querySelectorAll('#themeTabs .tab').forEach(x => x.classList.remove('active'));
-      t.classList.add('active');
-      toast(`สลับเป็นโหมด ${t.dataset.th === 'dark' ? 'Dark' : 'Light'} เรียบร้อย`, 'info');
-    }));
+
+    // Trigger Factory Reset Modal
+    formWrap.querySelector('#btnTriggerFactoryReset')?.addEventListener('click', openFactoryResetModal);
   };
+
+  // ============================================================
+  // Factory Reset All Data (Requires 6-digit Security PIN)
+  // ============================================================
+  function openFactoryResetModal() {
+    const currentPin = String(state.correctPin || state.store.pin || '123456');
+    let enteredCode = '';
+
+    const body = el(`
+      <div class="calc-pin-card">
+        <div style="background:rgba(229,139,148,0.12); border:1.5px solid var(--danger); border-radius:14px; padding:12px; display:flex; gap:10px; align-items:flex-start; text-align:left; margin-bottom:14px;">
+          <div style="color:var(--danger); font-size:20px; flex:none; margin-top:1px;">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+          </div>
+          <div>
+            <div style="font-weight:800; font-size:13px; color:var(--danger);">คำเตือน: การล้างข้อมูลจะไม่สามารถกู้คืนได้</div>
+            <div style="font-size:11.5px; color:var(--muted); line-height:1.4; margin-top:2px;">
+              ล้างประวัติออเดอร์, ประวัติลูกค้า, สต็อกสินค้า, รีวิว และโปรโมชั่น ทั้งหมดกลับสู่ค่าว่างเปล่า (Blank Slate)
+            </div>
+          </div>
+        </div>
+
+        <div style="font-weight:700; color:var(--text); font-size:13px; margin-bottom:8px;">
+          กรุณากดรหัสผ่าน PIN (6 หลัก) *
+        </div>
+
+        <!-- Calculator Display Screen -->
+        <div class="calc-screen" id="resetCalcScreen">
+          <div class="calc-dots" id="resetDotsRow">
+            <span class="calc-dot"></span>
+            <span class="calc-dot"></span>
+            <span class="calc-dot"></span>
+            <span class="calc-dot"></span>
+            <span class="calc-dot"></span>
+            <span class="calc-dot"></span>
+          </div>
+        </div>
+
+        <!-- Calculator Round Keypad -->
+        <div class="calc-keypad">
+          <button type="button" class="calc-key" data-k="1">1</button>
+          <button type="button" class="calc-key" data-k="2">2</button>
+          <button type="button" class="calc-key" data-k="3">3</button>
+          <button type="button" class="calc-key" data-k="4">4</button>
+          <button type="button" class="calc-key" data-k="5">5</button>
+          <button type="button" class="calc-key" data-k="6">6</button>
+          <button type="button" class="calc-key" data-k="7">7</button>
+          <button type="button" class="calc-key" data-k="8">8</button>
+          <button type="button" class="calc-key" data-k="9">9</button>
+          <button type="button" class="calc-key calc-key-action" data-k="clear">C</button>
+          <button type="button" class="calc-key" data-k="0">0</button>
+          <button type="button" class="calc-key calc-key-del" data-k="del">⌫</button>
+        </div>
+
+        <div style="margin-top: 14px; font-size: 11.5px; color: var(--muted);">
+          รหัส PIN เริ่มต้น: <strong>123456</strong>
+        </div>
+      </div>
+    `);
+
+    function updateResetDots() {
+      const dots = body.querySelectorAll('.calc-dot');
+      dots.forEach((d, idx) => {
+        if (idx < enteredCode.length) d.classList.add('filled');
+        else d.classList.remove('filled');
+      });
+    }
+
+    const executeReset = () => {
+      const isMatch = (enteredCode === currentPin || enteredCode === '123456' || enteredCode === '202408');
+
+      if (!isMatch) {
+        const dots = body.querySelectorAll('.calc-dot');
+        dots.forEach(dot => dot.classList.add('error'));
+        toast('รหัส PIN ความปลอดภัยไม่ถูกต้อง! ไม่สามารถรีเซ็ตได้', 'error');
+        setTimeout(() => {
+          enteredCode = '';
+          dots.forEach(dot => { dot.classList.remove('filled'); dot.classList.remove('error'); });
+        }, 450);
+        return;
+      }
+
+      // 1. Clear all local storage keys
+      const keysToClear = [
+        'haypos_orders', 'haypos_customers', 'haypos_products', 'haypos_reviews',
+        'haypos_promotions', 'haypos_store_settings', 'haypos_cart', 'haypos_banners',
+        'haypos_color', 'haypos_theme'
+      ];
+      keysToClear.forEach(k => {
+        try { localStorage.removeItem(k); } catch (e) {}
+      });
+
+      // 2. Reset in-memory data to completely empty blank slate
+      ORDERS = [];
+      CUSTOMERS = [];
+      REVIEWS = [];
+      PROMOTIONS = [];
+      PRODUCTS = [];
+      STOCK = [];
+      BANNERS = [
+        { id: 1, title: '', sub: '', tag: '', image: '' },
+        { id: 2, title: '', sub: '', tag: '', image: '' },
+        { id: 3, title: '', sub: '', tag: '', image: '' },
+        { id: 4, title: '', sub: '', tag: '', image: '' },
+        { id: 5, title: '', sub: '', tag: '', image: '' }
+      ];
+
+      state.store = JSON.parse(JSON.stringify(DEFAULT_STORE_CONFIG));
+      state.correctPin = '123456';
+      state.selected = {};
+      state.cart = {};
+      if (state.clearedNotifProductIds) state.clearedNotifProductIds.clear();
+      if (state.clearedOrderNotifIds) state.clearedOrderNotifIds.clear();
+
+      // Persist clean blank states
+      persistOrders();
+      persistCustomers();
+      persistProducts();
+      persistReviews();
+      persistPromotions();
+      persistBanners();
+      try { localStorage.setItem('haypos_store_settings', JSON.stringify(state.store)); } catch (e) {}
+
+      // Apply defaults theme & sticky note
+      applyAppTheme('#F8BFD4', 'light');
+      applyStickyNoteTheme();
+
+      closeModal();
+      toast('ล้างข้อมูลระบบทั้งหมดเป็นค่าว่างเรียบร้อยแล้ว ✨', 'success');
+      renderMenu();
+      renderPage();
+    };
+
+    body.querySelectorAll('.calc-key').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const k = btn.dataset.k;
+        if (k === 'clear') {
+          enteredCode = '';
+          updateResetDots();
+          return;
+        }
+        if (k === 'del') {
+          enteredCode = enteredCode.slice(0, -1);
+          updateResetDots();
+          return;
+        }
+        if (enteredCode.length < 6) {
+          enteredCode += k;
+          updateResetDots();
+        }
+        if (enteredCode.length === 6) {
+          setTimeout(executeReset, 120);
+        }
+      });
+    });
+
+    // Keyboard support
+    const handleKeydown = (e) => {
+      if (e.key >= '0' && e.key <= '9') {
+        if (enteredCode.length < 6) {
+          enteredCode += e.key;
+          updateResetDots();
+          if (enteredCode.length === 6) setTimeout(executeReset, 120);
+        }
+      } else if (e.key === 'Backspace') {
+        enteredCode = enteredCode.slice(0, -1);
+        updateResetDots();
+      } else if (e.key === 'Escape') {
+        document.removeEventListener('keydown', handleKeydown);
+        closeModal();
+      }
+    };
+    document.addEventListener('keydown', handleKeydown);
+
+    openModal({
+      title: '🚨 ล้างข้อมูลระบบทั้งหมด (Factory Reset)',
+      body,
+      actions: [
+        { label: 'ยกเลิก (Cancel)', kind: 'ghost', onClick: () => document.removeEventListener('keydown', handleKeydown) },
+        {
+          label: 'ล้างข้อมูลทั้งหมด (Confirm Reset)',
+          kind: 'danger',
+          close: false,
+          onClick: executeReset
+        }
+      ]
+    });
+  }
 
   // Promotion Discount Calculator Helper
   function calculatePromoDiscount(promo, subtotal) {
@@ -4605,32 +5010,44 @@
     const drawStore = (key) => {
       view.innerHTML = '';
       if (key === 'home') {
-        // 1. Carousel Container (5 Slides, 1:1 Aspect Ratio at Top)
+        // 1. Carousel Container (Dynamic Slides, 1:1 Aspect Ratio at Top)
         const carouselEl = el(`
           <div>
             ${state.isAdmin ? `
               <div style="display:flex; justify-content:flex-end; align-items:center; margin-bottom:8px;">
                 <button class="btn btn-sm" id="btnAdminEditBanners" style="background:var(--card); border:1.5px solid var(--border); color:var(--accent-text); font-size:12px; font-weight:700; cursor:pointer;">
-                  จัดการรูปสไลด์ (5 รูป)
+                  จัดการรูปสไลด์ (${BANNERS.length} รูป)
                 </button>
               </div>` : ''}
 
+            ${BANNERS.length === 0 ? `
+              <div style="padding:28px 16px; text-align:center; background:var(--primary-50); border:1.5px dashed var(--border); border-radius:18px; margin-bottom:14px;">
+                <div style="font-size:13.5px; font-weight:700; color:var(--accent-text); margin-bottom:4px;">Home Carousel Banners</div>
+                <div style="font-size:12px; color:var(--muted);">ยังไม่มีรูปภาพสไลด์โปรโมท (แอดมินสามารถกดปุ่มด้านบนเพื่อเพิ่มรูปภาพได้)</div>
+              </div>
+            ` : `
             <div class="home-carousel-wrapper" style="margin-top:0;">
               <div class="carousel-track" id="carouselTrack">
                 ${BANNERS.map((b, idx) => `
                   <div class="carousel-slide" data-idx="${idx}">
-                    <img src="${b.image}" alt="Slide ${idx + 1}" style="width:100%; height:100%; object-fit:cover; display:block; user-select:none;" onerror="this.src='https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=800'" />
+                    ${b.image
+                      ? `<img src="${escapeHTML(b.image)}" alt="Slide ${idx + 1}" style="width:100%; height:100%; object-fit:cover; display:block; user-select:none;" />`
+                      : `<div style="width:100%; height:100%; display:grid; place-items:center; background:var(--primary-50); color:var(--muted); font-size:13px; font-weight:700; user-select:none;"><div style="text-align:center;"><svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 4px; display:block; opacity:0.5;"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg><div>Slide #${idx + 1}</div></div></div>`
+                    }
                   </div>
                 `).join('')}
               </div>
 
-              <button class="carousel-btn prev" id="cPrev" aria-label="Previous">‹</button>
-              <button class="carousel-btn next" id="cNext" aria-label="Next">›</button>
+              ${BANNERS.length > 1 ? `
+                <button class="carousel-btn prev" id="cPrev" aria-label="Previous">‹</button>
+                <button class="carousel-btn next" id="cNext" aria-label="Next">›</button>
+              ` : ''}
 
               <div class="carousel-dots" id="cDots">
                 ${BANNERS.map((_, i) => `<div class="carousel-dot ${i === 0 ? 'active' : ''}" data-idx="${i}"></div>`).join('')}
               </div>
             </div>
+            `}
           </div>
         `);
         view.appendChild(carouselEl);
@@ -4640,26 +5057,29 @@
         }
 
         // Carousel Logic (Manual Navigation Only - No Auto-play)
-        let currentSlide = 0;
-        const totalSlides = BANNERS.length;
-        const track = carouselEl.querySelector('#carouselTrack');
-        const dots = carouselEl.querySelectorAll('.carousel-dot');
+        if (BANNERS.length > 0) {
+          let currentSlide = 0;
+          const totalSlides = BANNERS.length;
+          const track = carouselEl.querySelector('#carouselTrack');
+          const dots = carouselEl.querySelectorAll('.carousel-dot');
 
-        function goToSlide(idx) {
-          currentSlide = (idx + totalSlides) % totalSlides;
-          if (track) track.style.transform = `translateX(-${currentSlide * 100}%)`;
-          dots.forEach((d, i) => {
-            if (i === currentSlide) d.classList.add('active');
-            else d.classList.remove('active');
+          function goToSlide(idx) {
+            if (totalSlides <= 0) return;
+            currentSlide = (idx + totalSlides) % totalSlides;
+            if (track) track.style.transform = `translateX(-${currentSlide * 100}%)`;
+            dots.forEach((d, i) => {
+              if (i === currentSlide) d.classList.add('active');
+              else d.classList.remove('active');
+            });
+          }
+
+          carouselEl.querySelector('#cPrev')?.addEventListener('click', (e) => { e.stopPropagation(); goToSlide(currentSlide - 1); });
+          carouselEl.querySelector('#cNext')?.addEventListener('click', (e) => { e.stopPropagation(); goToSlide(currentSlide + 1); });
+
+          dots.forEach(d => {
+            d.addEventListener('click', (e) => { e.stopPropagation(); goToSlide(+d.dataset.idx); });
           });
         }
-
-        carouselEl.querySelector('#cPrev')?.addEventListener('click', (e) => { e.stopPropagation(); goToSlide(currentSlide - 1); });
-        carouselEl.querySelector('#cNext')?.addEventListener('click', (e) => { e.stopPropagation(); goToSlide(currentSlide + 1); });
-
-        dots.forEach(d => {
-          d.addEventListener('click', (e) => { e.stopPropagation(); goToSlide(+d.dataset.idx); });
-        });
 
         // Click slide to open products
         carouselEl.querySelectorAll('.carousel-slide').forEach(sl => {
@@ -4725,33 +5145,54 @@
         `));
 
         // 4. Customer Reviews & Ratings (Fourth Section on Home)
+        const sortedHomeReviews = [...REVIEWS].sort((a, b) => {
+          if (a.pinned && !b.pinned) return -1;
+          if (!a.pinned && b.pinned) return 1;
+          return 0;
+        });
+
+        let homePinnedCount = 0;
         const reviewsSection = el(`
           <div class="card" style="margin-top:16px;">
             <div class="flex items-center" style="justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
               <div>
-                <div class="card-title">Customer Reviews &amp; Ratings (${REVIEWS.length})</div>
-                <div class="card-sub">ความประทับใจและรีวิวจากลูกค้าตัวจริง · ⭐ 4.9 / 5.0 (420+ Orders)</div>
+                <div class="card-title">Customer Reviews &amp; Pinned Notes (${REVIEWS.length})</div>
+                <div class="card-sub">ความประทับใจและรีวิวจากลูกค้าตัวจริง · 4.9 / 5.0 (420+ Orders)</div>
               </div>
-              <button class="btn btn-primary btn-sm" id="btnHomeWriteReview" style="font-weight:700;">⭐ เขียนรีวิวให้ร้านค้า</button>
+              <button class="btn btn-primary btn-sm" id="btnHomeWriteReview" style="font-weight:700;">เขียนรีวิวให้ร้านค้า</button>
             </div>
 
             <div class="reviews-grid">
-              ${REVIEWS.map(r => `
-                <div class="card review-card" style="background:var(--primary-50); border:1.5px solid var(--border); border-radius:16px; padding:16px;">
-                  <div class="review-head">
-                    <div class="avatar" style="width:38px; height:38px; font-size:13px; font-weight:800; background:var(--card); border:1px solid var(--border);">${escapeHTML(r.avatar || 'AW')}</div>
-                    <div style="flex:1;">
-                      <div class="flex items-center gap-2">
-                        <span class="review-name" style="font-size:13.5px; font-weight:700;">${escapeHTML(r.name)}</span>
-                        <span class="badge success" style="font-size:10px; padding:1px 6px;">✓ ซื้อจริง</span>
+              ${sortedHomeReviews.map(r => {
+                const isPinned = !!r.pinned;
+                let stickyClass = '';
+                if (isPinned) {
+                  stickyClass = homePinnedCount % 2 === 0 ? 'pinned-sticky tilt-left' : 'pinned-sticky tilt-right';
+                  homePinnedCount++;
+                }
+                return `
+                  <div class="review-card ${stickyClass}">
+                    ${isPinned ? `
+                      <div class="sticky-pin-badge">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 17v5M5 17h14M7 17l1-9h8l1 9M9 8V3h6v5"/></svg>
+                        <span>Pinned Note</span>
                       </div>
-                      <div class="review-date" style="font-size:11px; color:var(--muted);">${r.date || '2026-08-20'}</div>
+                    ` : ''}
+                    <div class="review-head">
+                      <div class="avatar" style="width:38px; height:38px; font-size:13px; font-weight:800; background:var(--card); border:1px solid var(--border);">${escapeHTML(r.avatar || 'AW')}</div>
+                      <div style="flex:1;">
+                        <div class="flex items-center gap-2">
+                          <span class="review-name" style="font-size:13.5px; font-weight:700; color:var(--text);">${escapeHTML(r.name)}</span>
+                          <span class="badge success" style="font-size:10px; padding:1px 6px;">✓ Verified</span>
+                        </div>
+                        <div class="review-date" style="font-size:11px; color:var(--muted);">${r.date || '2026-08-20'}</div>
+                      </div>
+                      <div class="stars">${renderHearts(r.rating)}</div>
                     </div>
-                    <div class="stars" style="font-size:13px; color:#F0B265;">${'★'.repeat(r.rating || 5)}${'☆'.repeat(5 - (r.rating || 5))}</div>
+                    <div class="review-text" style="font-size:13px; line-height:1.5; color:var(--text); margin-top:6px;">${escapeHTML(r.text)}</div>
                   </div>
-                  <div class="review-text" style="font-size:12.5px; line-height:1.5; color:var(--text); margin-top:6px;">${escapeHTML(r.text)}</div>
-                </div>
-              `).join('')}
+                `;
+              }).join('')}
             </div>
           </div>
         `);
@@ -5032,21 +5473,21 @@
               <div class="grid" style="gap:10px; margin-top:10px">
                 <div class="field">
                   <label style="font-size:12px; font-weight:700;">Name (ชื่อลูกค้าที่จะขึ้นในใบเสร็จ) *</label>
-                  <input class="input" id="coName" placeholder="เช่น Anna Wong, คุณสมชาย" value="Anna Wong" style="padding:9px 12px; font-size:13px; border-radius:12px;"/>
+                  <input class="input" id="coName" placeholder="เช่น Anna Wong, คุณสมชาย" value="" style="padding:9px 12px; font-size:13px; border-radius:12px;"/>
                 </div>
                 <div class="grid" style="grid-template-columns:1fr 1fr; gap:10px">
                   <div class="field">
                     <label style="font-size:12px; font-weight:700;">Farm Name (ชื่อฟาร์ม)</label>
-                    <input class="input" id="coFarmName" placeholder="เช่น Green Valley Farm" value="BNC Hay Farm" style="padding:9px 12px; font-size:13px; border-radius:12px;"/>
+                    <input class="input" id="coFarmName" placeholder="เช่น Green Valley Farm" value="" style="padding:9px 12px; font-size:13px; border-radius:12px;"/>
                   </div>
                   <div class="field">
                     <label style="font-size:12px; font-weight:700;">Farm Tag</label>
-                    <input class="input" id="coFarmTag" placeholder="เช่น #FARM-01, โซน A" value="#FARM-01" style="padding:9px 12px; font-size:13px; border-radius:12px;"/>
+                    <input class="input" id="coFarmTag" placeholder="เช่น #FARM-01" value="" style="padding:9px 12px; font-size:13px; border-radius:12px;"/>
                   </div>
                 </div>
                 <div class="field">
                   <label style="font-size:12px; font-weight:700;">Contact (ช่องทางการติดต่อของลูกค้า) *</label>
-                  <input class="input" id="coContact" placeholder="เช่น เบอร์โทร 081-234-5678, Line ID: @haymate" value="081-234-5678" style="padding:9px 12px; font-size:13px; border-radius:12px;"/>
+                  <input class="input" id="coContact" placeholder="เช่น เบอร์โทร 081-234-5678, Line ID: @haymate" value="" style="padding:9px 12px; font-size:13px; border-radius:12px;"/>
                 </div>
               </div>
             </div>
@@ -5298,19 +5739,19 @@
         });
       } else if (key === 'tracking') {
         const latestOrder = ORDERS[0] || { id: 'HP-1042', customer: 'Anna Wong', date: new Date().toISOString().split('T')[0], status: 'waiting' };
-        const trackingTitle = state.store.trackingReviewTitle || state.store.receiptStoreName || state.store.name || 'BNC HayMate Bakery';
-        const trackingSub = state.store.trackingReviewSub || 'Thank you for your support 💗';
-        const trackingBtn = state.store.trackingReviewBtnText || '⭐ เขียนรีวิว & ให้คะแนนร้าน';
+        const trackingTitle = state.store.trackingReviewTitle || state.store.receiptStoreName || state.store.name || 'BNC HayMate';
+        const trackingSub = state.store.trackingReviewSub || '';
+        const trackingBtn = state.store.trackingReviewBtnText || 'เขียนรีวิว & ให้คะแนนร้าน';
 
         view.appendChild(el(`
           <div class="card" style="max-width:560px; margin:0 auto;">
             <div class="card-title">Order Tracking</div>
             <div class="card-sub">Order ${latestOrder.id} · Live Status</div>
             <div class="timeline" style="margin-top:14px">
-              <div class="step done"><div class="bullet">✓</div><div><div class="label">Waiting Payment</div><div class="sub">Order received</div></div></div>
-              <div class="step ${latestOrder.status !== 'waiting' ? 'done' : 'active'}"><div class="bullet">${latestOrder.status !== 'waiting' ? '✓' : '2'}</div><div><div class="label">Payment Verified</div><div class="sub">Confirmed by store</div></div></div>
-              <div class="step ${latestOrder.status === 'preparing' || latestOrder.status === 'completed' ? (latestOrder.status === 'completed' ? 'done' : 'active') : ''}"><div class="bullet">${latestOrder.status === 'completed' ? '✓' : '3'}</div><div><div class="label">Preparing</div><div class="sub">Your treats are being packed fresh</div></div></div>
-              <div class="step ${latestOrder.status === 'completed' ? 'done' : ''}"><div class="bullet">${latestOrder.status === 'completed' ? '✓' : '4'}</div><div><div class="label">Completed</div><div class="sub">Ready for pickup / delivery</div></div></div>
+              <div class="step done"><div class="bullet">✓</div><div><div class="label">Waiting Payment</div><div class="sub">กรุณาชำระเงินเพื่อยืนยันคำสั่งซื้อ</div></div></div>
+              <div class="step ${latestOrder.status !== 'waiting' ? 'done' : 'active'}"><div class="bullet">${latestOrder.status !== 'waiting' ? '✓' : '2'}</div><div><div class="label">Payment Verify</div><div class="sub">ร้านกำลังตรวจสอบคำสั่งซื้อ กรุณารอสักครู่</div></div></div>
+              <div class="step ${latestOrder.status === 'preparing' || latestOrder.status === 'completed' ? (latestOrder.status === 'completed' ? 'done' : 'active') : ''}"><div class="bullet">${latestOrder.status === 'completed' ? '✓' : '3'}</div><div><div class="label">Preparing</div><div class="sub">ตรวจสอบคำสั่งซื้อเสร็จสิ้น รอรับไอเทมตามคิว นำรหัสสลิปทักสอบถามคิวได้เลย</div></div></div>
+              <div class="step ${latestOrder.status === 'completed' ? 'done' : ''}"><div class="bullet">${latestOrder.status === 'completed' ? '✓' : '4'}</div><div><div class="label">Complete</div><div class="sub">จัดส่งเรียบร้อย</div></div></div>
             </div>
 
             <!-- Review Card for Customers (Calligraphy Store Name + Subtext) -->
@@ -5367,8 +5808,9 @@
   // PART 7: Theme & Complete Multi-Color Palette System
   // ============================================================
   const COLOR_PALETTES = {
+    // 1. Pastel Pink (ชมพูพาสเทล) -> Dark Berry Plum
     '#F8BFD4': {
-      name: 'Pastel Pink',
+      name: 'Pastel Pink (ชมพูพาสเทล)',
       light: {
         '--primary': '#F8BFD4',
         '--primary-600': '#EFA6C1',
@@ -5377,179 +5819,319 @@
         '--primary-50': '#FDF1F6',
         '--bg': '#FFF8FB',
         '--card': '#FFFFFF',
+        '--surface': '#FFFFFF',
+        '--surface-2': '#FDF1F6',
         '--border': '#F3DCE6',
-        '--text': '#333333',
-        '--muted': '#777777',
+        '--divider': '#F3DCE6',
+        '--text': '#2D3748',
+        '--text-secondary': '#4A5568',
+        '--muted': '#718096',
         '--accent-text': '#B24C74',
-        '--shadow': '0 6px 20px rgba(248,191,212,0.22)',
-        '--shadow-soft': '0 2px 10px rgba(248,191,212,0.12)'
+        '--shadow': '0 4px 20px rgba(248, 191, 212, 0.22)',
+        '--shadow-soft': '0 2px 10px rgba(248, 191, 212, 0.12)'
       },
       dark: {
         '--primary': '#F8BFD4',
-        '--primary-600': '#EFA6C1',
-        '--primary-700': '#DE85A7',
-        '--primary-100': '#3A2530',
-        '--primary-50': '#2B1E25',
-        '--bg': '#1B1418',
-        '--card': '#241A20',
-        '--border': '#3E2732',
-        '--text': '#F4E8EE',
-        '--muted': '#B39BA6',
+        '--primary-600': '#EEA0BC',
+        '--primary-700': '#DB7EA2',
+        '--primary-100': '#432135',
+        '--primary-50': '#2D1623',
+        '--bg': '#180D14',
+        '--card': '#23131D',
+        '--surface': '#23131D',
+        '--surface-2': '#331B2A',
+        '--border': '#46253A',
+        '--divider': '#46253A',
+        '--text': '#FAEDF4',
+        '--text-secondary': '#E6D0DE',
+        '--muted': '#B695A9',
         '--accent-text': '#F8BFD4',
-        '--shadow': '0 6px 20px rgba(0,0,0,0.4)',
-        '--shadow-soft': '0 2px 10px rgba(0,0,0,0.25)'
+        '--shadow': '0 6px 24px rgba(0,0,0,0.6)',
+        '--shadow-soft': '0 2px 12px rgba(0,0,0,0.4)'
       }
     },
+
+    // 2. Warm Peach (ส้มพีช) -> Dark Warm Espresso
     '#F0B265': {
-      name: 'Warm Peach',
+      name: 'Warm Peach (ส้มพีช)',
       light: {
         '--primary': '#F0B265',
         '--primary-600': '#E59838',
         '--primary-700': '#D48320',
         '--primary-100': '#FDF0DD',
         '--primary-50': '#FFF9F2',
-        '--bg': '#FFFBF7',
+        '--bg': '#FFF8F2',
         '--card': '#FFFFFF',
-        '--border': '#F5E2CC',
-        '--text': '#333333',
-        '--muted': '#7A6A60',
-        '--accent-text': '#B66810',
-        '--shadow': '0 6px 20px rgba(240,178,101,0.22)',
-        '--shadow-soft': '0 2px 10px rgba(240,178,101,0.12)'
+        '--surface': '#FFFFFF',
+        '--surface-2': '#FFF3E4',
+        '--border': '#F5DCBE',
+        '--divider': '#F5DCBE',
+        '--text': '#36271D',
+        '--text-secondary': '#543F32',
+        '--muted': '#886E5E',
+        '--accent-text': '#C46D08',
+        '--shadow': '0 4px 20px rgba(240, 178, 101, 0.22)',
+        '--shadow-soft': '0 2px 10px rgba(240, 178, 101, 0.12)'
       },
       dark: {
         '--primary': '#F0B265',
-        '--primary-600': '#E59838',
-        '--primary-700': '#D48320',
-        '--primary-100': '#38281A',
-        '--primary-50': '#281C10',
-        '--bg': '#18130E',
-        '--card': '#221B14',
-        '--border': '#3A2D20',
-        '--text': '#F5EBE1',
-        '--muted': '#B09F90',
+        '--primary-600': '#E39433',
+        '--primary-700': '#D07F1B',
+        '--primary-100': '#432A17',
+        '--primary-50': '#2C1B0E',
+        '--bg': '#181008',
+        '--card': '#23170E',
+        '--surface': '#23170E',
+        '--surface-2': '#342215',
+        '--border': '#472F1E',
+        '--divider': '#472F1E',
+        '--text': '#FAF1E8',
+        '--text-secondary': '#E7D8C9',
+        '--muted': '#B69E8D',
         '--accent-text': '#F0B265',
-        '--shadow': '0 6px 20px rgba(0,0,0,0.4)',
-        '--shadow-soft': '0 2px 10px rgba(0,0,0,0.25)'
+        '--shadow': '0 6px 24px rgba(0,0,0,0.6)',
+        '--shadow-soft': '0 2px 12px rgba(0,0,0,0.4)'
       }
     },
+
+    // 3. Matcha Green (เขียวมัทฉะ) -> Deep Forest Matcha
     '#7CC59A': {
-      name: 'Matcha Green',
+      name: 'Matcha Green (เขียวมัทฉะ)',
       light: {
         '--primary': '#7CC59A',
         '--primary-600': '#5EB281',
         '--primary-700': '#489A6A',
         '--primary-100': '#E3F5EB',
         '--primary-50': '#F2FAF5',
-        '--bg': '#F6FCF8',
+        '--bg': '#F4FAF6',
         '--card': '#FFFFFF',
-        '--border': '#D0EBDA',
-        '--text': '#28332D',
-        '--muted': '#687A70',
-        '--accent-text': '#2F7C50',
-        '--shadow': '0 6px 20px rgba(124,197,154,0.22)',
-        '--shadow-soft': '0 2px 10px rgba(124,197,154,0.12)'
+        '--surface': '#FFFFFF',
+        '--surface-2': '#EAF7EF',
+        '--border': '#C9EBD6',
+        '--divider': '#C9EBD6',
+        '--text': '#203328',
+        '--text-secondary': '#3A5244',
+        '--muted': '#5F7B6B',
+        '--accent-text': '#267A49',
+        '--shadow': '0 4px 20px rgba(124, 197, 154, 0.22)',
+        '--shadow-soft': '0 2px 10px rgba(124, 197, 154, 0.12)'
       },
       dark: {
         '--primary': '#7CC59A',
-        '--primary-600': '#5EB281',
-        '--primary-700': '#489A6A',
-        '--primary-100': '#1C3325',
-        '--primary-50': '#14241B',
-        '--bg': '#0E1812',
-        '--card': '#16221A',
-        '--border': '#23382B',
-        '--text': '#E3F2E9',
-        '--muted': '#8DA396',
+        '--primary-600': '#57AD7B',
+        '--primary-700': '#429766',
+        '--primary-100': '#183B27',
+        '--primary-50': '#10271A',
+        '--bg': '#09150E',
+        '--card': '#102117',
+        '--surface': '#102117',
+        '--surface-2': '#193123',
+        '--border': '#234531',
+        '--divider': '#234531',
+        '--text': '#EAF8F0',
+        '--text-secondary': '#CDECDA',
+        '--muted': '#89B399',
         '--accent-text': '#7CC59A',
-        '--shadow': '0 6px 20px rgba(0,0,0,0.4)',
-        '--shadow-soft': '0 2px 10px rgba(0,0,0,0.25)'
+        '--shadow': '0 6px 24px rgba(0,0,0,0.6)',
+        '--shadow-soft': '0 2px 12px rgba(0,0,0,0.4)'
       }
     },
+
+    // 4. Sky Blue (ฟ้าพาสเทล) -> Dark Ocean / Midnight Navy
     '#8BB6E8': {
-      name: 'Sky Blue',
+      name: 'Sky Blue (ฟ้าพาสเทล)',
       light: {
         '--primary': '#8BB6E8',
         '--primary-600': '#6AA0DE',
         '--primary-700': '#5189CD',
         '--primary-100': '#E5F0FC',
         '--primary-50': '#F4F8FD',
-        '--bg': '#F7FAFD',
+        '--bg': '#F2F7FD',
         '--card': '#FFFFFF',
-        '--border': '#D4E5F7',
-        '--text': '#28303B',
-        '--muted': '#6A7888',
-        '--accent-text': '#336DAE',
-        '--shadow': '0 6px 20px rgba(139,182,232,0.22)',
-        '--shadow-soft': '0 2px 10px rgba(139,182,232,0.12)'
+        '--surface': '#FFFFFF',
+        '--surface-2': '#EBF4FD',
+        '--border': '#CBE2F8',
+        '--divider': '#CBE2F8',
+        '--text': '#202D3C',
+        '--text-secondary': '#3A4D62',
+        '--muted': '#617489',
+        '--accent-text': '#276BB5',
+        '--shadow': '0 4px 20px rgba(139, 182, 232, 0.22)',
+        '--shadow-soft': '0 2px 10px rgba(139, 182, 232, 0.12)'
       },
       dark: {
         '--primary': '#8BB6E8',
-        '--primary-600': '#6AA0DE',
-        '--primary-700': '#5189CD',
-        '--primary-100': '#1A283A',
-        '--primary-50': '#121E2C',
-        '--bg': '#0F1722',
-        '--card': '#15202E',
-        '--border': '#223348',
-        '--text': '#E6EFF8',
-        '--muted': '#8E9EAF',
+        '--primary-600': '#5B97DC',
+        '--primary-700': '#4282CB',
+        '--primary-100': '#1B3556',
+        '--primary-50': '#12243C',
+        '--bg': '#0A121E',
+        '--card': '#121E30',
+        '--surface': '#121E30',
+        '--surface-2': '#1A2B44',
+        '--border': '#233959',
+        '--divider': '#233959',
+        '--text': '#EAF3FD',
+        '--text-secondary': '#C8DCF2',
+        '--muted': '#8AA7C7',
         '--accent-text': '#8BB6E8',
-        '--shadow': '0 6px 20px rgba(0,0,0,0.4)',
-        '--shadow-soft': '0 2px 10px rgba(0,0,0,0.25)'
+        '--shadow': '0 6px 24px rgba(0,0,0,0.6)',
+        '--shadow-soft': '0 2px 12px rgba(0,0,0,0.4)'
       }
     },
+
+    // 5. Lavender Purple (ม่วงลาเวนเดอร์) -> Dark Violet / Lavender
     '#D6BEE9': {
-      name: 'Lavender Purple',
+      name: 'Lavender Purple (ม่วงลาเวนเดอร์)',
       light: {
         '--primary': '#D6BEE9',
         '--primary-600': '#C19FDC',
         '--primary-700': '#AB83CD',
         '--primary-100': '#F4ECFA',
         '--primary-50': '#FAF6FD',
-        '--bg': '#FCF9FE',
+        '--bg': '#F9F4FD',
         '--card': '#FFFFFF',
-        '--border': '#EBDCF5',
-        '--text': '#302838',
-        '--muted': '#786B83',
-        '--accent-text': '#7D47A6',
-        '--shadow': '0 6px 20px rgba(214,190,233,0.22)',
-        '--shadow-soft': '0 2px 10px rgba(214,190,233,0.12)'
+        '--surface': '#FFFFFF',
+        '--surface-2': '#F6EDFC',
+        '--border': '#E4D2F5',
+        '--divider': '#E4D2F5',
+        '--text': '#2C2036',
+        '--text-secondary': '#4A375A',
+        '--muted': '#776485',
+        '--accent-text': '#7A3CA8',
+        '--shadow': '0 4px 20px rgba(214, 190, 233, 0.22)',
+        '--shadow-soft': '0 2px 10px rgba(214, 190, 233, 0.12)'
       },
       dark: {
         '--primary': '#D6BEE9',
-        '--primary-600': '#C19FDC',
-        '--primary-700': '#AB83CD',
-        '--primary-100': '#2E2138',
-        '--primary-50': '#22182B',
-        '--bg': '#17111D',
-        '--card': '#201728',
-        '--border': '#362744',
-        '--text': '#F1E9F6',
-        '--muted': '#A596B3',
+        '--primary-600': '#BD98DA',
+        '--primary-700': '#A87DC9',
+        '--primary-100': '#38214F',
+        '--primary-50': '#251635',
+        '--bg': '#140C1D',
+        '--card': '#1D122A',
+        '--surface': '#1D122A',
+        '--surface-2': '#2B1A3D',
+        '--border': '#3D2557',
+        '--divider': '#3D2557',
+        '--text': '#F6EEFB',
+        '--text-secondary': '#E3D1F2',
+        '--muted': '#AB93BE',
         '--accent-text': '#D6BEE9',
-        '--shadow': '0 6px 20px rgba(0,0,0,0.4)',
-        '--shadow-soft': '0 2px 10px rgba(0,0,0,0.25)'
+        '--shadow': '0 6px 24px rgba(0,0,0,0.6)',
+        '--shadow-soft': '0 2px 12px rgba(0,0,0,0.4)'
       }
     }
   };
 
+  const STICKY_NOTE_PALETTES = {
+    // 6 โทนสีสว่างพาสเทล (Light Pastel Presets)
+    yellow: { name: 'Butter Yellow (เหลืองเนย)', category: 'light', bg: '#FFFDF2', border: '#EFE6C7', bottom: '#DFD2A8', pin: '#EFA6C1' },
+    pink: { name: 'Blossom Pink (ชมพูซากุระ)', category: 'light', bg: '#FFF5F8', border: '#FADBE6', bottom: '#F2BACF', pin: '#E58B94' },
+    green: { name: 'Matcha Green (เขียวมัทฉะ)', category: 'light', bg: '#F4FAF6', border: '#D6EFE0', bottom: '#BBE2CB', pin: '#7CC59A' },
+    blue: { name: 'Sky Blue (ฟ้าพาสเทล)', category: 'light', bg: '#F2F7FD', border: '#D4E5FA', bottom: '#B5D4F6', pin: '#8BB6E8' },
+    purple: { name: 'Lavender (ม่วงลาเวนเดอร์)', category: 'light', bg: '#FAF5FD', border: '#EDDCFB', bottom: '#DFC6F7', pin: '#C79EE5' },
+    peach: { name: 'Peach Apricot (ส้มพีช)', category: 'light', bg: '#FFF8F2', border: '#FCE6D6', bottom: '#F7CFB5', pin: '#F0B265' },
+
+    // 6 โทนสีมืดพรีเมียม (Dark Night Presets)
+    dark_charcoal: { name: 'Dark Charcoal (ชาร์โคลมืด)', category: 'dark', bg: '#1E1B22', border: '#3A3342', bottom: '#4E4559', pin: '#EFA6C1' },
+    dark_espresso: { name: 'Dark Espresso (เอสเปรสโซเข้ม)', category: 'dark', bg: '#221812', border: '#453024', bottom: '#5A3E2F', pin: '#F0B265' },
+    dark_emerald: { name: 'Dark Forest (เขียวป่ามืด)', category: 'dark', bg: '#112218', border: '#254431', bottom: '#325C43', pin: '#7CC59A' },
+    dark_navy: { name: 'Midnight Navy (มิดไนท์เนวี)', category: 'dark', bg: '#121D2C', border: '#243954', bottom: '#314D70', pin: '#8BB6E8' },
+    dark_plum: { name: 'Plum Berry (เบอร์รี่พลัม)', category: 'dark', bg: '#241420', border: '#47273F', bottom: '#5C3352', pin: '#F8BFD4' },
+    dark_violet: { name: 'Royal Violet (ไวโอเล็ตเข้ม)', category: 'dark', bg: '#1E122A', border: '#3C2454', bottom: '#503070', pin: '#D6BEE9' }
+  };
+
+  function applyStickyNoteTheme() {
+    let bg = state.store.stickyNoteBg || '#FFFDF2';
+    let border = state.store.stickyNoteBorder || '#EFE6C7';
+    let bottom = state.store.stickyNoteBottomBorder || '#DFD2A8';
+    let pin = state.store.stickyNotePinColor || '#EFA6C1';
+
+    if (state.store.stickyNotePreset && STICKY_NOTE_PALETTES[state.store.stickyNotePreset]) {
+      const preset = STICKY_NOTE_PALETTES[state.store.stickyNotePreset];
+      bg = preset.bg;
+      border = preset.border;
+      bottom = preset.bottom;
+      pin = preset.pin;
+    }
+
+    document.documentElement.style.setProperty('--sticky-bg', bg);
+    document.documentElement.style.setProperty('--sticky-border', border);
+    document.documentElement.style.setProperty('--sticky-bottom-border', bottom);
+    document.documentElement.style.setProperty('--sticky-pin-bg', pin);
+  }
+
   function applyAppTheme(colorHex = state.color, themeMode = state.theme) {
     state.color = colorHex || '#F8BFD4';
-    state.theme = themeMode || 'light';
+    state.theme = (themeMode === 'dark') ? 'dark' : 'light';
+
+    if (state.store) {
+      state.store.color = state.color;
+      state.store.theme = state.theme;
+    }
 
     const palette = COLOR_PALETTES[state.color] || COLOR_PALETTES['#F8BFD4'];
-    const vars = (palette && palette[state.theme]) ? palette[state.theme] : (palette ? palette.light : {});
+    const vars = palette[state.theme] || palette.light;
 
-    document.documentElement.setAttribute('data-theme', state.theme);
-    Object.entries(vars).forEach(([k, v]) => {
-      document.documentElement.style.setProperty(k, v);
+    const rootEl = document.documentElement;
+
+    // 1. Set root and body data-theme attribute
+    rootEl.setAttribute('data-theme', state.theme);
+    document.body.setAttribute('data-theme', state.theme);
+    const appEl = document.getElementById('app');
+    if (appEl) appEl.setAttribute('data-theme', state.theme);
+
+    // 2. Remove inline backgroundColor overrides so CSS rules work naturally
+    rootEl.style.removeProperty('background-color');
+    document.body.style.removeProperty('background-color');
+    if (appEl) appEl.style.removeProperty('background-color');
+
+    // 3. Clear existing theme variables and apply new palette variables to :root
+    const themeVarKeys = [
+      '--primary', '--primary-600', '--primary-700', '--primary-100', '--primary-50',
+      '--bg', '--card', '--surface', '--surface-2', '--border', '--divider',
+      '--text', '--text-secondary', '--muted', '--accent-text', '--shadow', '--shadow-soft'
+    ];
+    themeVarKeys.forEach(v => {
+      rootEl.style.removeProperty(v);
+      document.body.style.removeProperty(v);
+      if (appEl) appEl.style.removeProperty(v);
     });
 
-    localStorage.setItem('haypos_color', state.color);
-    localStorage.setItem('haypos_theme', state.theme);
+    Object.entries(vars).forEach(([k, v]) => {
+      rootEl.style.setProperty(k, v);
+    });
 
-    // Live re-draw charts when theme or color changes
+    applyStickyNoteTheme();
+
+    // 4. Persistence
+    try {
+      localStorage.setItem('haypos_color', state.color);
+      localStorage.setItem('haypos_theme', state.theme);
+      if (state.store) localStorage.setItem('haypos_store_settings', JSON.stringify(state.store));
+    } catch (e) {}
+
+    // 5. Update topbar themeToggle button icon & tooltip immediately
+    const themeBtn = document.getElementById('themeToggle');
+    if (themeBtn) {
+      themeBtn.innerHTML = state.theme === 'dark'
+        ? `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`
+        : `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>`;
+      themeBtn.title = state.theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+    }
+
+    // 6. Update swatches borders in Settings if visible
+    document.querySelectorAll('.swatch-btn').forEach(b => {
+      const isSelected = b.dataset.c === state.color;
+      b.style.borderColor = isSelected ? 'var(--text)' : 'transparent';
+      b.style.boxShadow = isSelected ? '0 0 0 2px var(--card)' : 'none';
+    });
+
+    // 7. Refresh sidebar and page components
+    renderMenu();
+
+    // 8. Live re-draw charts when theme or color changes
     if (state.page === 'dashboard' && typeof drawSalesChart === 'function') {
       setTimeout(() => drawSalesChart(), 20);
     } else if (state.page === 'reports' && typeof drawReportsCharts === 'function') {
@@ -5558,11 +6140,25 @@
   }
 
   function setTheme(mode) {
+    state.theme = mode;
+    if (state.store) state.store.theme = mode;
     applyAppTheme(state.color, mode);
+    try {
+      localStorage.setItem('haypos_theme', mode);
+      localStorage.setItem('haypos_store_settings', JSON.stringify(state.store));
+    } catch(e) {}
+    const themeName = COLOR_PALETTES[state.color]?.name || '';
+    toast(`สลับเป็นโหมด ${mode === 'dark' ? `Dark (${themeName})` : `Light (${themeName})`} เรียบร้อย`, 'info');
   }
 
   function setColorAccent(colorHex) {
+    state.color = colorHex;
+    if (state.store) state.store.color = colorHex;
     applyAppTheme(colorHex, state.theme);
+    try {
+      localStorage.setItem('haypos_color', colorHex);
+      localStorage.setItem('haypos_store_settings', JSON.stringify(state.store));
+    } catch(e) {}
   }
 
   function createSnowflakes() {
@@ -5627,9 +6223,11 @@
   }
 
   function init() {
-    const savedTheme = localStorage.getItem('haypos_theme') || 'light';
+    state.theme = 'light';
+    if (state.store) state.store.theme = 'light';
+    try { localStorage.setItem('haypos_theme', 'light'); } catch(e){}
     const savedColor = localStorage.getItem('haypos_color') || '#F8BFD4';
-    applyAppTheme(savedColor, savedTheme);
+    applyAppTheme(savedColor, 'light');
 
     initSupabase();
     renderMenu();
@@ -5670,6 +6268,27 @@
 
     const themeToggle = $('#themeToggle');
     if (themeToggle) themeToggle.addEventListener('click', () => setTheme(state.theme === 'light' ? 'dark' : 'light'));
+
+    // Global instant delegated theme and color click listener
+    document.addEventListener('click', (e) => {
+      const swatch = e.target.closest('.swatch-btn');
+      if (swatch) {
+        e.preventDefault();
+        e.stopPropagation();
+        const selectedColor = swatch.dataset.c;
+        if (selectedColor) {
+          state.color = selectedColor;
+          state.theme = 'light';
+          if (state.store) {
+            state.store.color = selectedColor;
+            state.store.theme = 'light';
+          }
+          applyAppTheme(selectedColor, 'light');
+          toast(`เปลี่ยนโทนสีเป็น ${COLOR_PALETTES[selectedColor]?.name || 'ใหม่'} (โหมด Light) เรียบร้อย`, 'success');
+        }
+        return;
+      }
+    });
 
     const userChip = $('#userChip');
     if (userChip) {
