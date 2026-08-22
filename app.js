@@ -797,7 +797,7 @@
           console.log('Realtime product change:', payload);
           if (payload.eventType === 'INSERT') {
             const p = payload.new;
-            if (!PRODUCTS.find(x => x.id === p.id)) {
+            if (!PRODUCTS.find(x => String(x.id) === String(p.id))) {
               PRODUCTS.unshift({
                 id: p.id,
                 name: p.name,
@@ -812,7 +812,7 @@
             }
           } else if (payload.eventType === 'UPDATE') {
             const p = payload.new;
-            const idx = PRODUCTS.findIndex(x => x.id === p.id);
+            const idx = PRODUCTS.findIndex(x => String(x.id) === String(p.id));
             if (idx !== -1) {
               PRODUCTS[idx] = {
                 ...PRODUCTS[idx],
@@ -826,7 +826,7 @@
               renderPage();
             }
           } else if (payload.eventType === 'DELETE') {
-            PRODUCTS = PRODUCTS.filter(x => x.id !== payload.old.id);
+            PRODUCTS = PRODUCTS.filter(x => String(x.id) !== String(payload.old?.id));
             renderPage();
           }
         })
@@ -2413,7 +2413,7 @@
     body.querySelector('#pqDelete').addEventListener('click', () => {
       closeModal();
       confirmDialog(`Delete "${p.name}"?`, async () => {
-        PRODUCTS = PRODUCTS.filter(x => x.id !== p.id);
+        PRODUCTS = PRODUCTS.filter(x => String(x.id) !== String(p.id));
         if (supabase) {
           const { error } = await supabase.from('products').delete().eq('id', p.id);
           if (error) { toast('ลบสินค้าไม่สำเร็จ: ' + error.message, 'error'); return; }
@@ -2629,27 +2629,46 @@
             }
             toast(`อัปเดตสินค้า "${name}" แล้ว`, 'success');
           } else {
-            const newProd = {
-              id: Date.now(), // temporary ID; replaced by DB UUID via Realtime INSERT event
-              name,
-              cat,
-              level: 1,
-              price,
-              stock,
-              emoji,
-              image,
-              flavor,
-              status
-            };
-            PRODUCTS.unshift(newProd);
             if (supabase) {
               const { data: inserted, error } = await supabase.from('products').insert({
-                name, emoji, price, stock, status, flavor,
+                name,
+                emoji,
+                price,
+                stock,
+                status,
+                flavor,
                 image_url: image || null,
                 store_id: '00000000-0000-0000-0000-000000000001'
               }).select().single();
-              if (error) { toast('สร้างสินค้าไม่สำเร็จ: ' + error.message, 'error'); PRODUCTS.shift(); return; }
-              if (inserted) newProd.id = inserted.id; // use real UUID from DB
+
+              if (error) {
+                toast('สร้างสินค้าไม่สำเร็จ: ' + error.message, 'error');
+                return;
+              }
+
+              if (inserted) {
+                const newProd = {
+                  id: inserted.id,
+                  name: inserted.name,
+                  cat: cat || 'Bakery',
+                  level: 1,
+                  price: Number(inserted.price || 0),
+                  stock: Number(inserted.stock !== undefined ? inserted.stock : 0),
+                  emoji: inserted.emoji || '🍰',
+                  image: inserted.image_url || '',
+                  flavor: inserted.flavor || '',
+                  status: (inserted.stock === 0 || inserted.status === 'out_of_stock') ? 'out' : (inserted.stock < 10) ? 'low' : 'active'
+                };
+                if (!PRODUCTS.find(x => String(x.id) === String(inserted.id))) {
+                  PRODUCTS.unshift(newProd);
+                }
+              }
+            } else {
+              const newProd = {
+                id: Date.now(),
+                name, cat, level: 1, price, stock, emoji, image, flavor, status
+              };
+              PRODUCTS.unshift(newProd);
             }
             toast(`สร้างสินค้าใหม่ "${name}" สำเร็จแล้ว!`, 'success');
           }
@@ -2692,7 +2711,14 @@
           if (!CATEGORIES.find(c => c.name.toLowerCase() === name.toLowerCase())) {
             CATEGORIES.push({ name, count: 0, emoji });
           }
-          if (supabase) await supabase.from('categories').insert({ name, emoji });
+          if (supabase) {
+            const { error } = await supabase.from('categories').insert({
+              name,
+              emoji,
+              store_id: '00000000-0000-0000-0000-000000000001'
+            });
+            if (error) { toast('สร้างหมวดหมู่ไม่สำเร็จ: ' + error.message, 'error'); return; }
+          }
           toast(`สร้างหมวดหมู่ "${name}" เรียบร้อยแล้ว`, 'success');
           renderPage();
         }},
