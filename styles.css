@@ -212,6 +212,48 @@ input,select,textarea{font-family:inherit;color:inherit}
   padding:10px 14px; border-top:1px solid var(--border);
   background:var(--primary-50); display:flex; justify-content:space-between; align-items:center;
 }
+
+/* Live Users & Admin Status Card */
+.active-users-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.user-status-card {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.18s ease;
+}
+.user-status-card:hover {
+  border-color: var(--primary-600);
+  background: var(--card);
+}
+.user-status-card.current {
+  border: 1.5px solid var(--primary-600);
+  background: var(--primary-50);
+}
+.online-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #7CC59A;
+  display: inline-block;
+  box-shadow: 0 0 0 2px rgba(124, 197, 154, 0.35);
+  animation: pulseDot 2s infinite;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+@keyframes pulseDot {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(124, 197, 154, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(124, 197, 154, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(124, 197, 154, 0); }
+}
 .search-wrap{
   flex:1; max-width:520px;
   display:flex; align-items:center; gap:10px;
