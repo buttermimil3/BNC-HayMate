@@ -691,6 +691,7 @@
 
       if (stRes?.data && stRes.data[0]) {
         const s = stRes.data[0];
+        state.storeId = s.id;
         if (s.name) state.store.name = s.name;
         if (s.tagline) state.store.tagline = s.tagline;
         if (s.currency) state.store.currency = s.currency;
@@ -2726,7 +2727,11 @@
                 name, price, stock, status, flavor,
                 image_url: image || null
               }).eq('id', existing.id);
-              if (error) { toast('บันทึกไม่สำเร็จ: ' + error.message, 'error'); return; }
+              if (error) {
+                console.error('Product update error:', error);
+                toast('บันทึกไม่สำเร็จ: ' + error.message, 'error');
+                return;
+              }
             }
             toast(`อัปเดตสินค้า "${name}" แล้ว`, 'success');
             renderPage();
@@ -2744,6 +2749,7 @@
             };
 
             if (supabase) {
+              const storeId = state.storeId || '00000000-0000-0000-0000-000000000001';
               const { data: inserted, error } = await supabase.from('products').insert({
                 name,
                 price,
@@ -2751,14 +2757,20 @@
                 status,
                 flavor,
                 image_url: image || null,
-                store_id: '00000000-0000-0000-0000-000000000001'
+                store_id: storeId
               }).select().single();
 
-              if (!error && inserted) {
+              if (error) {
+                console.error('Product insert error:', error);
+                toast('บันทึกสินค้าในระบบ Cloud ไม่สำเร็จ: ' + error.message, 'error');
+                return;
+              }
+
+              if (inserted) {
                 newProd = {
                   id: inserted.id,
                   name: inserted.name,
-                  cat: inserted.cat || cat,
+                  cat: cat,
                   price: Number(inserted.price || price),
                   stock: Number(inserted.stock !== undefined ? inserted.stock : stock),
                   status: inserted.status || status,
