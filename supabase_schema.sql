@@ -71,6 +71,7 @@ CREATE TABLE products (
     price NUMERIC(10,2) NOT NULL DEFAULT 0,
     stock INT NOT NULL DEFAULT 0,
     status TEXT DEFAULT 'active' CHECK (status IN ('active','inactive','out_of_stock')),
+    image_url TEXT DEFAULT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

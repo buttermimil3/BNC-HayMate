@@ -22,6 +22,36 @@
     return false;
   }
 
+  // ============================================================
+  // Supabase Storage: Upload product image, return public URL
+  // ============================================================
+  async function uploadProductImage(file) {
+    if (!supabase) throw new Error('Supabase ไม่พร้อมใช้งาน');
+    const MAX_SIZE = 2 * 1024 * 1024; // 2 MB
+    if (file.size > MAX_SIZE) throw new Error('รูปภาพต้องมีขนาดไม่เกิน 2 MB');
+    if (!file.type.startsWith('image/')) throw new Error('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
+
+    // Check auth session — Storage policies require authenticated admin
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('กรุณาเข้าสู่ระบบด้วย Email/Password เพื่ออัปโหลดรูปภาพ');
+
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const storeId = '00000000-0000-0000-0000-000000000001';
+    const filePath = `${storeId}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('product-images')
+      .upload(filePath, file, { upsert: false, contentType: file.type });
+
+    if (uploadError) throw uploadError;
+
+    const { data: urlData } = supabase.storage
+      .from('product-images')
+      .getPublicUrl(filePath);
+
+    return urlData.publicUrl;
+  }
+
   
   const ICONS = {
     dashboard: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="nav-icon"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>`,
@@ -75,17 +105,9 @@
   ];
 
   let ORDERS = [];
-  try {
-    const savedOrders = localStorage.getItem('haypos_orders');
-    if (savedOrders) {
-      const parsed = JSON.parse(savedOrders);
-      if (Array.isArray(parsed)) ORDERS = parsed;
-    }
-  } catch (e) {}
+  // ORDERS are loaded from Supabase on init — localStorage is NOT the source of truth
 
-  function persistOrders() {
-    try { localStorage.setItem('haypos_orders', JSON.stringify(ORDERS)); } catch (e) {}
-  }
+  function persistOrders() { /* no-op: Supabase is the single source of truth */ }
 
   const STATUS = {
     waiting: { label: 'Waiting Payment', cls: 'warn' },
@@ -96,20 +118,9 @@
   };
 
   let PRODUCTS = [];
-  try {
-    const savedP = localStorage.getItem('haypos_products') || localStorage.getItem('haypos_custom_products');
-    if (savedP) {
-      const parsed = JSON.parse(savedP);
-      if (Array.isArray(parsed)) PRODUCTS = parsed;
-    }
-  } catch (e) {}
+  // PRODUCTS are loaded from Supabase on init — localStorage is NOT the source of truth
 
-  function persistProducts() {
-    try {
-      localStorage.setItem('haypos_products', JSON.stringify(PRODUCTS));
-      localStorage.setItem('haypos_custom_products', JSON.stringify(PRODUCTS));
-    } catch (e) {}
-  }
+  function persistProducts() { /* no-op: Supabase is the single source of truth */ }
 
   let CATEGORIES = [
     { name: 'Bakery', count: 0, emoji: '🥐' },
@@ -118,59 +129,24 @@
     { name: 'Seasonal', count: 0, emoji: '🌸' },
     { name: 'Gift Box', count: 0, emoji: '🎁' },
   ];
+  // Defaults above shown during loading only; Supabase overwrites on init
 
-  try {
-    const savedC = localStorage.getItem('haypos_categories');
-    if (savedC) {
-      const parsed = JSON.parse(savedC);
-      if (Array.isArray(parsed) && parsed.length > 0) CATEGORIES = parsed;
-    }
-  } catch (e) {}
-
-  function persistCategories() {
-    try { localStorage.setItem('haypos_categories', JSON.stringify(CATEGORIES)); } catch (e) {}
-  }
+  function persistCategories() { /* no-op: Supabase is the single source of truth */ }
 
   let CUSTOMERS = [];
-  try {
-    const savedCust = localStorage.getItem('haypos_customers');
-    if (savedCust) {
-      const parsed = JSON.parse(savedCust);
-      if (Array.isArray(parsed)) CUSTOMERS = parsed;
-    }
-  } catch (e) {}
+  // CUSTOMERS are loaded from Supabase on init — localStorage is NOT the source of truth
 
-  function persistCustomers() {
-    try { localStorage.setItem('haypos_customers', JSON.stringify(CUSTOMERS)); } catch (e) {}
-  }
+  function persistCustomers() { /* no-op: Supabase is the single source of truth */ }
 
   let REVIEWS = [];
-  try {
-    const savedReviews = localStorage.getItem('haypos_reviews');
-    if (savedReviews) {
-      const parsed = JSON.parse(savedReviews);
-      if (Array.isArray(parsed)) REVIEWS = parsed;
-    }
-  } catch (e) {}
+  // REVIEWS are loaded from Supabase on init — localStorage is NOT the source of truth
 
-  function persistReviews() {
-    try {
-      localStorage.setItem('haypos_reviews', JSON.stringify(REVIEWS));
-    } catch (e) {}
-  }
+  function persistReviews() { /* no-op: Supabase is the single source of truth */ }
 
   let PROMOTIONS = [];
-  try {
-    const savedP = localStorage.getItem('haypos_promotions');
-    if (savedP) {
-      const parsed = JSON.parse(savedP);
-      if (Array.isArray(parsed)) PROMOTIONS = parsed;
-    }
-  } catch (e) {}
+  // PROMOTIONS are loaded from Supabase on init — localStorage is NOT the source of truth
 
-  function persistPromotions() {
-    try { localStorage.setItem('haypos_promotions', JSON.stringify(PROMOTIONS)); } catch (e) {}
-  }
+  function persistPromotions() { /* no-op: Supabase is the single source of truth */ }
 
   let BANNERS = [
     { id: 1, title: '', sub: '', tag: '', image: '' },
@@ -650,7 +626,7 @@
         supabase.from('promotions').select('*').order('created_at', { ascending: false }),
       ]);
 
-      if (pRes.data && pRes.data.length > 0) {
+      if (pRes.data) {
         PRODUCTS = pRes.data.map(p => ({
           id: p.id,
           name: p.name,
@@ -659,23 +635,23 @@
           price: Number(p.price || 0),
           stock: Number(p.stock !== undefined ? p.stock : 0),
           emoji: p.emoji || '🍰',
-          image: p.image_url || p.image || '',
+          image: p.image_url || '',
           flavor: p.flavor || '',
           status: (p.stock === 0 || p.status === 'out_of_stock') ? 'out' : (p.stock < 10 || p.status === 'low') ? 'low' : 'active'
         }));
-        persistProducts();
+        // Not calling persistProducts() — Supabase is the source of truth
       }
 
-      if (cRes.data && cRes.data.length > 0) {
+      if (cRes.data) {
         CATEGORIES = cRes.data.map(c => ({
           name: c.name,
           count: PRODUCTS.filter(p => p.cat === c.name).length,
           emoji: c.emoji || '🧁'
         }));
-        persistCategories();
+        // Not calling persistCategories() — Supabase is the source of truth
       }
 
-      if (oRes.data && oRes.data.length > 0) {
+      if (oRes.data) {
         ORDERS = oRes.data.map(o => ({
           id: o.order_number || o.id,
           customer: o.customer_name || 'Walk-in Customer',
@@ -684,18 +660,18 @@
           total: Number(o.total || 0),
           status: o.status || 'waiting'
         }));
-        persistOrders();
+        // Not calling persistOrders() — Supabase is the source of truth
       }
 
-      if (cuRes.data && cuRes.data.length > 0) {
+      if (cuRes.data) {
         CUSTOMERS = cuRes.data.map(c => ({
           name: c.name, email: c.email || 'customer@bnchaymate.com',
           orders: c.total_orders || 1, spend: Number(c.total_spending || 0), tag: c.tag || 'New'
         }));
-        persistCustomers();
+        // Not calling persistCustomers() — Supabase is the source of truth
       }
 
-      if (rRes.data && rRes.data.length > 0) {
+      if (rRes.data) {
         REVIEWS = rRes.data.map(r => ({
           id: r.id,
           name: r.customer_name || 'Valued Guest',
@@ -705,10 +681,10 @@
           text: r.comment || '',
           pinned: !!r.is_pinned
         }));
-        persistReviews();
+        // Not calling persistReviews() — Supabase is the source of truth
       }
 
-      if (prRes.data && prRes.data.length > 0) {
+      if (prRes.data) {
         PROMOTIONS = prRes.data.map(p => ({
           code: p.code,
           type: p.type === 'percent' ? 'Coupon' : 'Fixed',
@@ -717,20 +693,106 @@
           end: p.end_date || '2026-12-31',
           status: p.status || 'active'
         }));
-        persistPromotions();
+        // Not calling persistPromotions() — Supabase is the source of truth
       }
 
-      renderPage();
-      toast('Supabase Cloud Sync: Connected', 'success');
+      console.log('Supabase data loaded:', { products: PRODUCTS.length, categories: CATEGORIES.length, orders: ORDERS.length });
+      toast('✅ Cloud Sync: Connected', 'success');
     } catch (e) {
-      console.warn('Supabase fetch error, using local state:', e);
+      console.warn('Supabase fetch error:', e);
+      toast('⚠️ ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณาตรวจสอบการเชื่อมต่อ', 'error');
     }
   }
+
+  let syncChannel = null;
 
   function setupRealtimeSubscriptions() {
     if (!supabase) return;
     try {
-      supabase.channel('haypos-multi-device-sync')
+      if (syncChannel) {
+        supabase.removeChannel(syncChannel);
+        syncChannel = null;
+      }
+
+      syncChannel = supabase.channel('haypos-multi-device-sync')
+        .on('broadcast', { event: 'new_order' }, ({ payload }) => {
+          console.log('Realtime broadcast new_order received:', payload);
+          if (payload && payload.id) {
+            const existingIdx = ORDERS.findIndex(x => x.id === payload.id);
+            if (existingIdx === -1) {
+              ORDERS.unshift(payload);
+              persistOrders();
+              notifyNewOrder(payload);
+              if (state.page === 'orders' || state.page === 'dashboard' || state.page === 'store') {
+                renderPage();
+              }
+            }
+          }
+        })
+        .on('broadcast', { event: 'order_status_update' }, ({ payload }) => {
+          console.log('Realtime broadcast order_status_update received:', payload);
+          if (payload && payload.orderId) {
+            const idx = ORDERS.findIndex(x => x.id === payload.orderId);
+            if (idx !== -1) {
+              ORDERS[idx].status = payload.status;
+              persistOrders();
+              if (state.page === 'orders' || state.page === 'dashboard' || state.page === 'store') {
+                renderPage();
+              }
+            }
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+          console.log('Realtime postgres orders event:', payload);
+          if (payload.eventType === 'INSERT') {
+            const o = payload.new;
+            const orderId = o.order_number || o.id;
+            if (!ORDERS.find(x => x.id === orderId)) {
+              let custName = o.customer_name || 'Customer';
+              let farmN = '';
+              let farmT = '';
+              let contactInfo = '';
+              if (o.note && o.note.includes('Customer:')) {
+                const parts = o.note.split('|').map(s => s.trim());
+                parts.forEach(p => {
+                  if (p.startsWith('Customer:')) custName = p.replace('Customer:', '').trim();
+                  if (p.startsWith('Farm:')) farmN = p.replace('Farm:', '').trim();
+                  if (p.startsWith('Contact:')) contactInfo = p.replace('Contact:', '').trim();
+                });
+              }
+              const newO = {
+                id: orderId,
+                customer: custName,
+                farm_name: farmN,
+                farm_tag: farmT,
+                contact: contactInfo,
+                date: (o.created_at || '').split('T')[0] || new Date().toISOString().split('T')[0],
+                items: o.items_count || 1,
+                total: Number(o.total || 0),
+                subtotal: Number(o.subtotal || o.total || 0),
+                discount: Number(o.discount || 0),
+                status: o.status || 'waiting'
+              };
+              ORDERS.unshift(newO);
+              persistOrders();
+              notifyNewOrder(newO);
+              if (state.page === 'orders' || state.page === 'dashboard') {
+                renderPage();
+              }
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const o = payload.new;
+            const orderId = o.order_number || o.id;
+            const idx = ORDERS.findIndex(x => x.id === orderId);
+            if (idx !== -1) {
+              ORDERS[idx] = { ...ORDERS[idx], status: o.status || ORDERS[idx].status };
+              persistOrders();
+              if (state.page === 'orders' || state.page === 'dashboard' || state.page === 'store') {
+                renderPage();
+              }
+            }
+          }
+        })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, (payload) => {
           console.log('Realtime product change:', payload);
           if (payload.eventType === 'INSERT') {
@@ -743,10 +805,9 @@
                 price: Number(p.price || 0),
                 stock: Number(p.stock !== undefined ? p.stock : 0),
                 emoji: p.emoji || '🍰',
-                image: p.image_url || p.image || '',
+                image: p.image_url || '',
                 status: (p.stock === 0 || p.status === 'out_of_stock') ? 'out' : (p.stock < 10) ? 'low' : 'active'
               });
-              persistProducts();
               renderPage();
             }
           } else if (payload.eventType === 'UPDATE') {
@@ -759,43 +820,14 @@
                 price: p.price !== undefined ? Number(p.price) : PRODUCTS[idx].price,
                 stock: p.stock !== undefined ? Number(p.stock) : PRODUCTS[idx].stock,
                 status: p.status || PRODUCTS[idx].status,
-                emoji: p.emoji || PRODUCTS[idx].emoji
+                emoji: p.emoji || PRODUCTS[idx].emoji,
+                image: p.image_url !== undefined ? (p.image_url || '') : PRODUCTS[idx].image
               };
-              persistProducts();
               renderPage();
             }
           } else if (payload.eventType === 'DELETE') {
             PRODUCTS = PRODUCTS.filter(x => x.id !== payload.old.id);
-            persistProducts();
             renderPage();
-          }
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
-          console.log('Realtime order change:', payload);
-          if (payload.eventType === 'INSERT') {
-            const o = payload.new;
-            if (!ORDERS.find(x => x.id === o.order_number || x.id === o.id)) {
-              const newO = {
-                id: o.order_number || o.id,
-                customer: o.customer_name || 'Customer',
-                date: (o.created_at || '').split('T')[0] || new Date().toISOString().split('T')[0],
-                items: o.items_count || 1,
-                total: Number(o.total || 0),
-                status: o.status || 'waiting'
-              };
-              ORDERS.unshift(newO);
-              persistOrders();
-              notifyNewOrder(newO);
-              renderPage();
-            }
-          } else if (payload.eventType === 'UPDATE') {
-            const o = payload.new;
-            const idx = ORDERS.findIndex(x => x.id === o.order_number || x.id === o.id);
-            if (idx !== -1) {
-              ORDERS[idx] = { ...ORDERS[idx], status: o.status || ORDERS[idx].status };
-              persistOrders();
-              renderPage();
-            }
           }
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'promotions' }, (payload) => {
@@ -2109,14 +2141,42 @@
       if (act === 'cancel') {
         confirmDialog('Cancel this order?', async () => {
           o.status = 'cancelled';
-          if (supabase) await supabase.from('orders').update({ status: 'cancelled' }).eq('order_number', o.id);
+          persistOrders();
+          if (syncChannel) {
+            try {
+              syncChannel.send({
+                type: 'broadcast',
+                event: 'order_status_update',
+                payload: { orderId: o.id, status: 'cancelled' }
+              });
+            } catch (e) {}
+          }
+          if (supabase) {
+            try {
+              await supabase.from('orders').update({ status: 'cancelled' }).eq('order_number', o.id);
+            } catch (e) {}
+          }
           toast('Order cancelled', 'success');
           renderPage();
         });
       } else {
         const nextStatus = act === 'verify' ? 'verify' : act === 'prepare' ? 'preparing' : 'completed';
         o.status = nextStatus;
-        if (supabase) await supabase.from('orders').update({ status: nextStatus }).eq('order_number', o.id);
+        persistOrders();
+        if (syncChannel) {
+          try {
+            syncChannel.send({
+              type: 'broadcast',
+              event: 'order_status_update',
+              payload: { orderId: o.id, status: nextStatus }
+            });
+          } catch (e) {}
+        }
+        if (supabase) {
+          try {
+            await supabase.from('orders').update({ status: nextStatus }).eq('order_number', o.id);
+          } catch (e) {}
+        }
         toast(`Order updated to: ${STATUS[nextStatus]?.label || nextStatus}`, 'success');
         renderPage();
       }
@@ -2354,8 +2414,10 @@
       closeModal();
       confirmDialog(`Delete "${p.name}"?`, async () => {
         PRODUCTS = PRODUCTS.filter(x => x.id !== p.id);
-        try { localStorage.setItem('haypos_custom_products', JSON.stringify(PRODUCTS)); } catch(e){}
-        if (supabase) await supabase.from('products').delete().eq('name', p.name);
+        if (supabase) {
+          const { error } = await supabase.from('products').delete().eq('id', p.id);
+          if (error) { toast('ลบสินค้าไม่สำเร็จ: ' + error.message, 'error'); return; }
+        }
         toast('Product deleted', 'success');
         renderPage();
       });
@@ -2372,8 +2434,10 @@
             const val = Number($('#adjStockInput')?.value || 0);
             p.stock = val;
             p.status = val === 0 ? 'out' : val < 10 ? 'low' : 'active';
-            try { localStorage.setItem('haypos_custom_products', JSON.stringify(PRODUCTS)); } catch(e){}
-            if (supabase) await supabase.from('products').update({ stock: val }).eq('name', p.name);
+            if (supabase) {
+              const { error } = await supabase.from('products').update({ stock: val }).eq('id', p.id);
+              if (error) { toast('อัปเดตสต็อกไม่สำเร็จ: ' + error.message, 'error'); return; }
+            }
             toast('Stock updated', 'success');
             renderPage();
           }}
@@ -2469,19 +2533,25 @@
     const newCatWrap = body.querySelector('#newCatWrap');
 
     triggerBtn.addEventListener('click', () => fileInp.click());
-    fileInp.addEventListener('change', (e) => {
+    fileInp.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        currentImage = evt.target.result;
+      triggerBtn.disabled = true;
+      triggerBtn.textContent = 'กำลังอัปโหลด...';
+      try {
+        const publicUrl = await uploadProductImage(file);
+        currentImage = publicUrl;
         previewImg.src = currentImage;
         previewImg.style.display = 'block';
         previewEmoji.style.display = 'none';
-        urlInp.value = '(Uploaded Photo)';
+        urlInp.value = currentImage;
         toast('อัปโหลดรูปภาพสินค้าเรียบร้อย', 'success');
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        toast('อัปโหลดไม่สำเร็จ: ' + (err.message || 'กรุณาเข้าสู่ระบบด้วย Email/Password'), 'error');
+      } finally {
+        triggerBtn.disabled = false;
+        triggerBtn.textContent = 'อัปโหลดรูปภาพ';
+      }
     });
 
     urlInp.addEventListener('input', (e) => {
@@ -2550,11 +2620,17 @@
             existing.stock = stock;
             existing.flavor = flavor;
             existing.status = status;
-            if (supabase) await supabase.from('products').update({ name, emoji, price, stock, status, flavor }).eq('id', existing.id);
+            if (supabase) {
+              const { error } = await supabase.from('products').update({
+                name, emoji, price, stock, status, flavor,
+                image_url: image || null
+              }).eq('id', existing.id);
+              if (error) { toast('บันทึกไม่สำเร็จ: ' + error.message, 'error'); return; }
+            }
             toast(`อัปเดตสินค้า "${name}" แล้ว`, 'success');
           } else {
             const newProd = {
-              id: Date.now(),
+              id: Date.now(), // temporary ID; replaced by DB UUID via Realtime INSERT event
               name,
               cat,
               level: 1,
@@ -2566,14 +2642,17 @@
               status
             };
             PRODUCTS.unshift(newProd);
-            if (supabase) await supabase.from('products').insert({ name, emoji, price, stock, status, flavor });
+            if (supabase) {
+              const { data: inserted, error } = await supabase.from('products').insert({
+                name, emoji, price, stock, status, flavor,
+                image_url: image || null,
+                store_id: '00000000-0000-0000-0000-000000000001'
+              }).select().single();
+              if (error) { toast('สร้างสินค้าไม่สำเร็จ: ' + error.message, 'error'); PRODUCTS.shift(); return; }
+              if (inserted) newProd.id = inserted.id; // use real UUID from DB
+            }
             toast(`สร้างสินค้าใหม่ "${name}" สำเร็จแล้ว!`, 'success');
           }
-
-          // Persist to local storage
-          try {
-            localStorage.setItem('haypos_custom_products', JSON.stringify(PRODUCTS));
-          } catch(e){}
 
           renderPage();
         }}
@@ -2769,12 +2848,14 @@
 
     prodTableCard.querySelectorAll('[data-a="del-p"]').forEach(b => {
       b.addEventListener('click', () => {
-        const prod = PRODUCTS.find(x => x.id === +b.dataset.id);
+        const prod = PRODUCTS.find(x => String(x.id) === String(b.dataset.id));
         if (!prod) return;
         confirmDialog(`Delete product "${prod.name}"?`, async () => {
           PRODUCTS = PRODUCTS.filter(x => x.id !== prod.id);
-          try { localStorage.setItem('haypos_custom_products', JSON.stringify(PRODUCTS)); } catch(e){}
-          if (supabase) await supabase.from('products').delete().eq('name', prod.name);
+          if (supabase) {
+            const { error } = await supabase.from('products').delete().eq('id', prod.id);
+            if (error) { toast('ลบสินค้าไม่สำเร็จ: ' + error.message, 'error'); return; }
+          }
           toast('Product deleted', 'success');
           renderPage();
         });
@@ -2844,18 +2925,13 @@
           }
 
           target.status = getStockStatusInfo(target.stock).type === 'danger' ? 'out_of_stock' : getStockStatusInfo(target.stock).type === 'warn' ? 'low' : 'active';
-          
-          try {
-            localStorage.setItem('haypos_custom_products', JSON.stringify(PRODUCTS));
-          } catch(e){}
 
           if (supabase) {
-            try {
-              await supabase.from('products').update({
-                stock: target.stock,
-                status: target.status === 'out_of_stock' ? 'out_of_stock' : 'active'
-              }).eq('name', target.name);
-            } catch (e) {}
+            const { error } = await supabase.from('products').update({
+              stock: target.stock,
+              status: target.status === 'out_of_stock' ? 'out_of_stock' : 'active'
+            }).eq('id', target.id);
+            if (error) { toast('อัปเดตสต็อกไม่สำเร็จ: ' + error.message, 'error'); return; }
           }
 
           toast(`ปรับสต็อกสินค้า "${target.name}" สำเร็จ (สต็อกคงเหลือ: ${target.stock} ชิ้น)✨`, 'success');
@@ -2894,15 +2970,17 @@
       actions: [
         { label: 'Cancel', kind: 'ghost' },
         { label: 'Submit Movement', kind: 'primary', onClick: async () => {
-          const pid = Number($('#smProd')?.value || 1);
+          const pid = $('#smProd')?.value;
           const type = $('#smType')?.value || 'in';
           const qty = Number($('#smQty')?.value || 10);
-          const p = PRODUCTS.find(x => x.id === pid);
+          const p = PRODUCTS.find(x => String(x.id) === String(pid));
           if (p) {
             p.stock = Math.max(0, p.stock + (type === 'in' ? qty : -qty));
             p.status = getStockStatusInfo(p.stock).type === 'danger' ? 'out_of_stock' : getStockStatusInfo(p.stock).type === 'warn' ? 'low' : 'active';
-            try { localStorage.setItem('haypos_custom_products', JSON.stringify(PRODUCTS)); } catch(e){}
-            if (supabase) await supabase.from('products').update({ stock: p.stock }).eq('name', p.name);
+            if (supabase) {
+              const { error } = await supabase.from('products').update({ stock: p.stock }).eq('id', p.id);
+              if (error) { toast('อัปเดตสต็อกไม่สำเร็จ: ' + error.message, 'error'); return; }
+            }
           }
           toast('Stock movement recorded', 'success');
           renderPage();
@@ -5748,19 +5826,40 @@
             slip_url: uploadedSlipData || ''
           };
           ORDERS.unshift(newOrder);
+          persistOrders();
           notifyNewOrder(newOrder);
 
+          // 1. Instant Real-time WebSocket Broadcast to Admin and all devices
+          if (syncChannel) {
+            try {
+              syncChannel.send({
+                type: 'broadcast',
+                event: 'new_order',
+                payload: newOrder
+              });
+            } catch (e) {
+              console.warn('Sync broadcast new_order notice:', e);
+            }
+          }
+
+          // 2. Persist to Supabase Database table 'orders'
           if (supabase) {
-            await supabase.from('orders').insert({
-              order_number: newOrderNumber,
-              subtotal: subtotal,
-              discount: discount,
-              tax: 0,
-              total: total,
-              status: 'waiting',
-              payment_method: 'qr',
-              note: `Customer: ${name} | Farm: ${farmName} (${farmTag}) | Contact: ${contact} | Promo: ${state.appliedPromo?.code || '-'}`
-            });
+            try {
+              await supabase.from('orders').insert({
+                store_id: '00000000-0000-0000-0000-000000000001',
+                order_number: newOrderNumber,
+                customer_id: null,
+                subtotal: Number(subtotal || 0),
+                discount: Number(discount || 0),
+                tax: 0,
+                total: Number(total || 0),
+                status: 'waiting',
+                payment_method: 'qr',
+                note: `Customer: ${name} | Farm: ${farmName} (${farmTag}) | Contact: ${contact} | Promo: ${state.appliedPromo?.code || '-'}`
+              });
+            } catch (dbErr) {
+              console.warn('Supabase orders table insert notice:', dbErr);
+            }
           }
 
           state.selected = {};
@@ -6334,7 +6433,7 @@
     }, 40);
   }
 
-  function init() {
+  async function init() {
     state.theme = 'light';
     if (state.store) state.store.theme = 'light';
     try { localStorage.setItem('haypos_theme', 'light'); } catch(e){}
@@ -6343,7 +6442,7 @@
 
     initSupabase();
     renderMenu();
-    renderPage();
+    // Note: renderPage() is called after Supabase data is loaded (at the bottom of init)
 
     // Topbar & Global Buttons (Active Sidebar Collapse & Drawer Toggle)
     const menuToggle = $('#menuToggle');
@@ -6460,17 +6559,31 @@
       }
     });
 
-    // Run Cute Loading Tube Progress Bar
-    runLoadingProgress();
-
     // Initialize Stock Low Alerts Notification System
     initStockNotifications();
 
-    // Check Auth Session & Connect live backend with Realtime
-    checkAuthSession();
-    loadSupabaseData();
-    setupRealtimeSubscriptions();
-    setupRealtimePresence();
+    // Clean up legacy localStorage keys — product data now lives in Supabase only
+    ['haypos_products', 'haypos_custom_products', 'haypos_categories',
+     'haypos_orders', 'haypos_customers', 'haypos_reviews', 'haypos_promotions']
+      .forEach(k => { try { localStorage.removeItem(k); } catch(e){} });
+
+    // Start Supabase data fetch and loading animation concurrently.
+    // renderPage() is called only after BOTH complete — ensuring the UI always
+    // shows fresh data from Supabase, never stale localStorage data.
+    const dataPromise = (async () => {
+      await checkAuthSession();
+      await loadSupabaseData();
+      setupRealtimeSubscriptions();
+      setupRealtimePresence();
+    })();
+
+    // Wait for loading animation to complete
+    await new Promise(resolve => runLoadingProgress(resolve));
+    // Also wait for Supabase data (if still in flight after animation)
+    await dataPromise;
+
+    // Single authoritative render — always from Supabase data
+    renderPage();
   }
 
   if (document.readyState === 'loading') {
