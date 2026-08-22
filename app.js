@@ -706,8 +706,22 @@
         if (ss.account_holder) state.store.account_holder = ss.account_holder;
         if (ss.primary_color) {
           state.color = ss.primary_color;
-          applyAppTheme(state.color, state.theme || 'light');
+          state.store.color = ss.primary_color;
         }
+        if (ss.dark_mode !== undefined && ss.dark_mode !== null) {
+          state.theme = ss.dark_mode ? 'dark' : 'light';
+          state.store.theme = state.theme;
+        }
+        if (ss.theme_config && typeof ss.theme_config === 'object') {
+          if (ss.theme_config.store) {
+            state.store = { ...state.store, ...ss.theme_config.store };
+          }
+          if (Array.isArray(ss.theme_config.banners)) {
+            BANNERS = ss.theme_config.banners;
+          }
+        }
+        applyAppTheme(state.color, state.theme || 'light');
+        applyStickyNoteTheme();
       }
 
       if (pRes.data) {
@@ -870,6 +884,35 @@
           toast('ระบบได้รับการรีเซ็ตข้อมูลใหม่ทั้งหมดแล้ว', 'info');
           renderMenu();
           renderPage();
+        })
+        .on('broadcast', { event: 'store_settings_updated' }, ({ payload }) => {
+          console.log('Realtime broadcast store_settings_updated received:', payload);
+          if (payload) {
+            if (payload.color) state.color = payload.color;
+            if (payload.theme) state.theme = payload.theme;
+            if (payload.store) state.store = { ...state.store, ...payload.store };
+            if (Array.isArray(payload.banners)) BANNERS = payload.banners;
+            applyAppTheme(state.color, state.theme || 'light');
+            applyStickyNoteTheme();
+            renderMenu();
+            renderPage();
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'store_settings' }, (payload) => {
+          console.log('Realtime postgres store_settings event:', payload);
+          if (payload.new) {
+            const ss = payload.new;
+            if (ss.primary_color) state.color = ss.primary_color;
+            if (ss.dark_mode !== undefined && ss.dark_mode !== null) state.theme = ss.dark_mode ? 'dark' : 'light';
+            if (ss.theme_config && typeof ss.theme_config === 'object') {
+              if (ss.theme_config.store) state.store = { ...state.store, ...ss.theme_config.store };
+              if (Array.isArray(ss.theme_config.banners)) BANNERS = ss.theme_config.banners;
+            }
+            applyAppTheme(state.color, state.theme || 'light');
+            applyStickyNoteTheme();
+            renderMenu();
+            renderPage();
+          }
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
           console.log('Realtime postgres orders event:', payload);
@@ -1709,6 +1752,7 @@
             collectCurrentInputs();
             BANNERS = editList;
             persistBanners();
+            syncStoreSettingsAcrossDevices();
             toast(`อัปเดตสไลด์รูปภาพ ${BANNERS.length} รูปเรียบร้อยแล้ว!`, 'success');
             renderPage();
           }
@@ -5190,24 +5234,8 @@
         localStorage.setItem('haypos_store_settings', JSON.stringify(state.store));
       } catch (e) {}
 
-      // Update Supabase if available
-      if (supabase) {
-        supabase.from('stores').update({
-          name: state.store.name,
-          tagline: state.store.tagline,
-          currency: state.store.currency,
-          timezone: state.store.timezone
-        }).limit(1).then(() => {}).catch(() => {});
-
-        supabase.from('store_settings').upsert({
-          store_id: '00000000-0000-0000-0000-000000000001',
-          qr_image_url: state.store.qr_image_url || null,
-          bank_name: state.store.bank_name || null,
-          bank_account: state.store.bank_account || null,
-          account_holder: state.store.account_holder || null,
-          primary_color: state.color || '#F8BFD4'
-        }, { onConflict: 'store_id' }).then(() => {}).catch(() => {});
-      }
+      // Sync all settings, themes, banners across all devices & persist to Supabase
+      syncStoreSettingsAcrossDevices();
 
       renderMenu();
       renderPage();
@@ -5742,39 +5770,71 @@
             }).join('')}
           </div>
           <div class="card" style="margin-top:16px">
-            <div class="card-title">${escapeHTML(state.store.popularTitle || 'Popular Picks')}</div>
-            <div class="card-sub">${escapeHTML(state.store.popularSub || 'Best sellers this week')}</div>
-            <div class="product-grid" id="homePopularGrid">
-              ${PRODUCTS.slice(0, 16).map(p => {
-                const qty = state.selected[p.id] || 0;
-                const imgUrl = p.image || DEFAULT_PRODUCT_IMG;
-                return `
-                <div class="product-tile ${qty ? 'selected' : ''}" data-id="${p.id}" title="${escapeHTML(p.name)} · ${money(p.price)}">
-                  <img src="${escapeHTML(imgUrl)}" alt="${escapeHTML(p.name)}" onerror="this.src='${DEFAULT_PRODUCT_IMG}';" />
-                  <span class="qty-badge">${qty}</span>
-                </div>`;
-              }).join('')}
+            <div class="flex items-center" style="justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+              <div>
+                <div class="card-title">${escapeHTML(state.store.popularTitle || 'Menu & Products')} (${PRODUCTS.length})</div>
+                <div class="card-sub">${escapeHTML(state.store.popularSub || 'เลือกชมและสั่งซื้อสินค้าขนมอบและเครื่องดื่มสดใหม่')}</div>
+              </div>
+              <button class="btn btn-primary btn-sm" id="btnHomeViewAllMenu" style="font-weight:700;">ดูเมนูทั้งหมด (${PRODUCTS.length} รายการ) →</button>
             </div>
+
+            ${PRODUCTS.length > 0 ? `
+              <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:14px;" id="homeProductCardsGrid">
+                ${PRODUCTS.map(p => {
+                  const qty = state.selected[p.id] || 0;
+                  const imgUrl = p.image || DEFAULT_PRODUCT_IMG;
+                  const stockCls = p.stock === 0 ? 'out' : p.stock < 10 ? 'low' : '';
+                  return `
+                    <div class="card home-product-card ${stockCls}" data-id="${p.id}" style="padding:12px; border:1.5px solid var(--border); border-radius:16px; background:var(--card); display:flex; flex-direction:column; position:relative; cursor:pointer; margin:0;">
+                      <div style="position:relative; width:100%; aspect-ratio:1/1; border-radius:12px; overflow:hidden; background:var(--primary-50); border:1px solid var(--border); margin-bottom:10px;">
+                        <img src="${escapeHTML(imgUrl)}" alt="${escapeHTML(p.name)}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='${DEFAULT_PRODUCT_IMG}';" />
+                        ${qty > 0 ? `<span class="qty-badge" style="display:flex; position:absolute; top:6px; right:6px; width:24px; height:24px; border-radius:50%; background:var(--primary-600); color:#fff; font-size:12px; font-weight:800; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,0.3);">${qty}</span>` : ''}
+                        ${p.stock === 0 ? `<div style="position:absolute; inset:0; background:rgba(0,0,0,0.55); color:#fff; display:grid; place-items:center; font-size:12px; font-weight:800;">สินค้าหมด</div>` : ''}
+                      </div>
+                      
+                      <div style="flex:1; display:flex; flex-direction:column;">
+                        <div style="font-size:11px; color:var(--muted); font-weight:700;">${escapeHTML(p.cat || 'Bakery')}</div>
+                        <div style="font-weight:800; font-size:14px; color:var(--text); line-height:1.3; margin:2px 0 4px; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">${escapeHTML(p.name)}</div>
+                        ${p.flavor ? `<div style="font-size:11.5px; color:var(--muted); margin-bottom:6px;">${escapeHTML(p.flavor)}</div>` : ''}
+                        
+                        <div style="margin-top:auto; display:flex; align-items:center; justify-content:space-between; gap:6px; padding-top:8px; border-top:1px dashed var(--border);">
+                          <div style="font-weight:800; font-size:15px; color:var(--accent-text);">${money(p.price)}</div>
+                          <button type="button" class="btn btn-sm btn-home-add" data-id="${p.id}" style="padding:4px 10px; font-size:11.5px; font-weight:700; background:${qty > 0 ? 'var(--primary-600)' : 'var(--primary-50)'}; color:${qty > 0 ? '#fff' : 'var(--accent-text)'}; border:1px solid var(--border); border-radius:8px;">
+                            ${qty > 0 ? `✓ ในตะกร้า (${qty})` : '+ สั่งซื้อ'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            ` : `
+              <div style="padding:32px 16px; text-align:center; background:var(--primary-50); border:1.5px dashed var(--border); border-radius:16px;">
+                <div style="font-weight:700; font-size:14px; color:var(--text); margin-bottom:4px;">ยังไม่มีสินค้าในขณะนี้</div>
+                <div style="font-size:12px; color:var(--muted);">เมื่อแอดมินสร้างสินค้าใหม่ สินค้าจะปรากฏที่หน้านี้โดยอัตโนมัติ</div>
+              </div>
+            `}
           </div>
         `));
 
-        // Attach listeners for Home popular picks
-        view.querySelectorAll('#homePopularGrid .product-tile').forEach(tile => {
-          const pid = tile.dataset.id;
-          const p = PRODUCTS.find(x => String(x.id) === String(pid));
-          if (!p) return;
-          tile.addEventListener('click', () => {
-            if (p.stock === 0) return toast(`${p.name} is out of stock`, 'error');
+        // Attach listeners for Home products
+        view.querySelectorAll('.home-product-card').forEach(card => {
+          card.addEventListener('click', (e) => {
+            const pid = card.dataset.id;
+            const p = PRODUCTS.find(x => String(x.id) === String(pid));
+            if (!p) return;
+            if (p.stock === 0) return toast(`${p.name} สินค้าหมด`, 'error');
             state.selected[p.id] = (state.selected[p.id] || 0) + 1;
-            tile.classList.add('selected');
-            const badge = tile.querySelector('.qty-badge');
-            if (badge) {
-              badge.textContent = state.selected[p.id];
-              badge.style.animation = 'none'; void badge.offsetWidth; badge.style.animation = '';
-            }
             toast(`เพิ่ม ${p.name} ลงในตะกร้าแล้ว`, 'success');
             updateFloatingCartBtn();
+            drawStore('home');
           });
+        });
+
+        view.querySelector('#btnHomeViewAllMenu')?.addEventListener('click', () => {
+          root.querySelectorAll('#storeTabs .tab').forEach(x => x.classList.remove('active'));
+          root.querySelector('#storeTabs [data-s="products"]')?.classList.add('active');
+          drawStore('products');
         });
 
         // 4. Customer Reviews & Ratings (Fourth Section on Home)
@@ -5912,6 +5972,7 @@
           items.forEach(p => {
             const sInfo = getStockStatusInfo(p.stock);
             const stockCls = sInfo.dotClass;
+            const qty = state.selected[p.id] || 0;
             const imgUrl = p.image || DEFAULT_PRODUCT_IMG;
             const mediaHtml = `<img src="${escapeHTML(imgUrl)}" alt="${escapeHTML(p.name)}" onerror="this.src='${DEFAULT_PRODUCT_IMG}';" />`;
             const tile = el(`
@@ -6851,6 +6912,59 @@
     }
   }
 
+  async function syncStoreSettingsAcrossDevices() {
+    const storeId = state.storeId || '00000000-0000-0000-0000-000000000001';
+    const payload = {
+      color: state.color,
+      theme: state.theme || 'light',
+      store: state.store,
+      banners: BANNERS
+    };
+
+    // 1. Broadcast to all connected devices in realtime
+    if (syncChannel) {
+      try {
+        syncChannel.send({
+          type: 'broadcast',
+          event: 'store_settings_updated',
+          payload
+        });
+      } catch (e) {
+        console.warn('Realtime settings broadcast notice:', e);
+      }
+    }
+
+    // 2. Persist to Supabase store_settings table
+    if (supabase) {
+      try {
+        await supabase.from('store_settings').upsert({
+          store_id: storeId,
+          qr_image_url: state.store.qr_image_url || null,
+          bank_name: state.store.bank_name || null,
+          bank_account: state.store.bank_account || null,
+          account_holder: state.store.account_holder || null,
+          primary_color: state.color || '#F8BFD4',
+          dark_mode: state.theme === 'dark',
+          theme_config: {
+            store: state.store,
+            banners: BANNERS
+          }
+        }, { onConflict: 'store_id' });
+
+        if (state.store.name) {
+          await supabase.from('stores').update({
+            name: state.store.name,
+            tagline: state.store.tagline,
+            currency: state.store.currency,
+            timezone: state.store.timezone
+          }).eq('id', storeId);
+        }
+      } catch (dbErr) {
+        console.warn('Supabase store settings upsert notice:', dbErr);
+      }
+    }
+  }
+
   function setTheme(mode) {
     state.theme = mode;
     if (state.store) state.store.theme = mode;
@@ -6861,6 +6975,7 @@
     } catch(e) {}
     const themeName = COLOR_PALETTES[state.color]?.name || '';
     toast(`สลับเป็นโหมด ${mode === 'dark' ? `Dark (${themeName})` : `Light (${themeName})`} เรียบร้อย`, 'info');
+    syncStoreSettingsAcrossDevices();
   }
 
   function setColorAccent(colorHex) {
@@ -6871,6 +6986,7 @@
       localStorage.setItem('haypos_color', colorHex);
       localStorage.setItem('haypos_store_settings', JSON.stringify(state.store));
     } catch(e) {}
+    syncStoreSettingsAcrossDevices();
   }
 
   function createSnowflakes() {
