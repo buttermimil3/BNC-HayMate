@@ -182,11 +182,11 @@
   function persistProducts() { /* no-op: Supabase is the single source of truth */ }
 
   let CATEGORIES = [
-    { name: 'Bakery', count: 0, emoji: '🥐' },
-    { name: 'Drinks', count: 0, emoji: '🍹' },
-    { name: 'Snacks', count: 0, emoji: '🍪' },
-    { name: 'Seasonal', count: 0, emoji: '🌸' },
-    { name: 'Gift Box', count: 0, emoji: '🎁' },
+    { name: 'Bakery', count: 0 },
+    { name: 'Drinks', count: 0 },
+    { name: 'Snacks', count: 0 },
+    { name: 'Seasonal', count: 0 },
+    { name: 'Gift Box', count: 0 },
   ];
   // Defaults above shown during loading only; Supabase overwrites on init
 
@@ -418,7 +418,7 @@
       if (state.recentOrderNotifs.length > 30) state.recentOrderNotifs.pop();
     }
 
-    toast(`🔔 ออเดอร์ใหม่เข้ามา! #${order.id} จากคุณ ${order.customer} (${money(order.total)})`, 'success');
+    toast(`ออเดอร์ใหม่เข้ามา! #${order.id} จากคุณ ${order.customer} (${money(order.total)})`, 'success');
     updateStockNotifications();
   }
 
@@ -507,7 +507,7 @@
             return `
               <div class="notif-card-item ${sInfo.type}" data-id="${p.id}">
                 <div style="width:36px; height:36px; border-radius:10px; overflow:hidden; background:var(--primary-50); display:grid; place-items:center; border:1px solid var(--border); flex:none;">
-                  ${p.image ? `<img src="${escapeHTML(p.image)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='block';" /><span style="display:none; font-size:16px;">${p.emoji || '🍰'}</span>` : `<span style="font-size:16px;">${p.emoji || '🍰'}</span>`}
+                  ${p.image ? `<img src="${escapeHTML(p.image)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='block';" /><span style="display:none; font-size:16px;">${p.emoji || ''}</span>` : `<span style="font-size:16px;">${p.emoji || ''}</span>`}
                 </div>
                 <div style="flex:1; min-width:0;">
                   <div style="font-weight:700; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text);">${escapeHTML(p.name)}</div>
@@ -718,7 +718,7 @@
           level: p.level || 1,
           price: Number(p.price || 0),
           stock: Number(p.stock !== undefined ? p.stock : 0),
-          emoji: p.emoji || '🍰',
+          emoji: p.emoji || '',
           image: p.image_url || '',
           flavor: p.flavor || '',
           status: (p.stock === 0 || p.status === 'out_of_stock') ? 'out' : (p.stock < 10 || p.status === 'low') ? 'low' : 'active'
@@ -730,7 +730,7 @@
         CATEGORIES = cRes.data.map(c => ({
           name: c.name,
           count: PRODUCTS.filter(p => p.cat === c.name).length,
-          emoji: c.emoji || '🧁'
+          emoji: c.emoji || ''
         }));
         // Not calling persistCategories() — Supabase is the source of truth
       }
@@ -781,10 +781,10 @@
       }
 
       console.log('Supabase data loaded:', { products: PRODUCTS.length, categories: CATEGORIES.length, orders: ORDERS.length });
-      toast('✅ Cloud Sync: Connected', 'success');
+      toast('Cloud Sync: Connected', 'success');
     } catch (e) {
       console.warn('Supabase fetch error:', e);
-      toast('⚠️ ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณาตรวจสอบการเชื่อมต่อ', 'error');
+      toast('ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณาตรวจสอบการเชื่อมต่อ', 'error');
     }
   }
 
@@ -829,6 +829,47 @@
               }
             }
           }
+        })
+        .on('broadcast', { event: 'product_created' }, ({ payload }) => {
+          console.log('Realtime broadcast product_created received:', payload);
+          if (payload && payload.id) {
+            const idx = PRODUCTS.findIndex(x => String(x.id) === String(payload.id));
+            if (idx === -1) {
+              PRODUCTS.unshift(payload);
+              renderPage();
+            }
+          }
+        })
+        .on('broadcast', { event: 'product_updated' }, ({ payload }) => {
+          console.log('Realtime broadcast product_updated received:', payload);
+          if (payload && payload.id) {
+            const idx = PRODUCTS.findIndex(x => String(x.id) === String(payload.id));
+            if (idx !== -1) {
+              PRODUCTS[idx] = { ...PRODUCTS[idx], ...payload };
+              renderPage();
+            }
+          }
+        })
+        .on('broadcast', { event: 'product_deleted' }, ({ payload }) => {
+          console.log('Realtime broadcast product_deleted received:', payload);
+          if (payload && payload.id) {
+            PRODUCTS = PRODUCTS.filter(x => String(x.id) !== String(payload.id));
+            renderPage();
+          }
+        })
+        .on('broadcast', { event: 'system_reset' }, () => {
+          console.log('Realtime broadcast system_reset received from admin');
+          ORDERS = [];
+          CUSTOMERS = [];
+          REVIEWS = [];
+          PROMOTIONS = [];
+          PRODUCTS = [];
+          STOCK = [];
+          state.selected = {};
+          state.cart = {};
+          toast('ระบบได้รับการรีเซ็ตข้อมูลใหม่ทั้งหมดแล้ว', 'info');
+          renderMenu();
+          renderPage();
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
           console.log('Realtime postgres orders event:', payload);
@@ -892,7 +933,7 @@
                 cat: p.cat || 'Bakery',
                 price: Number(p.price || 0),
                 stock: Number(p.stock !== undefined ? p.stock : 0),
-                emoji: p.emoji || '🍰',
+                emoji: p.emoji || '',
                 image: p.image_url || '',
                 status: (p.stock === 0 || p.status === 'out_of_stock') ? 'out' : (p.stock < 10) ? 'low' : 'active'
               });
@@ -923,7 +964,7 @@
           if (payload.eventType === 'INSERT') {
             const c = payload.new;
             if (!CATEGORIES.find(x => x.name.toLowerCase() === c.name.toLowerCase())) {
-              CATEGORIES.push({ name: c.name, count: 0, emoji: c.emoji || '🧁' });
+              CATEGORIES.push({ name: c.name, count: 0, emoji: c.emoji || '' });
               renderPage();
             }
           } else if (payload.eventType === 'UPDATE') {
@@ -977,9 +1018,9 @@
 
   function getDeviceType() {
     const ua = navigator.userAgent || '';
-    if (/iPad|Tablet/i.test(ua)) return '📱 Tablet (POS)';
-    if (/Mobi|Android|iPhone/i.test(ua)) return '📱 Smartphone (มือถือ)';
-    return '💻 Desktop PC (คอมพิวเตอร์)';
+    if (/iPad|Tablet/i.test(ua)) return 'Tablet (POS)';
+    if (/Mobi|Android|iPhone/i.test(ua)) return 'Smartphone (มือถือ)';
+    return 'Desktop PC (คอมพิวเตอร์)';
   }
 
   function updatePresencePayload() {
@@ -1725,7 +1766,7 @@
             <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
               <strong style="font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text);">${escapeHTML(name)}</strong>
               <span class="badge ${isCurrent ? 'success' : (u.isAdmin ? 'warning' : 'info')}" style="font-size:10px; padding:1px 6px;">
-                ${isCurrent ? 'อุปกรณ์ปัจจุบัน (This Device)' : (u.isAdmin ? '⚡ แอดมินออนไลน์' : '🛒 ลูกค้าออนไลน์')}
+                ${isCurrent ? 'อุปกรณ์ปัจจุบัน (This Device)' : (u.isAdmin ? 'แอดมินออนไลน์' : 'ลูกค้าออนไลน์')}
               </span>
             </div>
             <div style="font-size:11.5px; color:var(--accent-text); font-weight:600;">
@@ -2380,7 +2421,7 @@
           </div>
           
           <a href="${slipImgSrc}" download="Payment-Slip-${o.id}.png" class="btn btn-primary btn-block mt-3" style="text-align:center; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:6px;">
-            ⬇️ ดาวน์โหลดสลิป (Download Slip)
+            ดาวน์โหลดสลิป (Download Slip)
           </a>
         </div>
       </div>
@@ -2500,8 +2541,8 @@
     const stockLabel = p.stock === 0 ? 'Out of stock' : p.stock < 10 ? `Low · ${p.stock} left` : `${p.stock} in stock`;
     const stockCls = p.stock === 0 ? 'danger' : p.stock < 10 ? 'warn' : 'success';
     const mediaHtml = p.image
-      ? `<img src="${escapeHTML(p.image)}" alt="${escapeHTML(p.name)}" style="width:72px;height:72px;border-radius:14px;object-fit:cover;flex:none;" onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';" /><div style="display:none;width:72px;height:72px;place-items:center;font-size:34px;border-radius:14px;background:var(--primary-50);flex:none;">${p.emoji || '🍰'}</div>`
-      : `<div style="width:72px;height:72px;display:grid;place-items:center;font-size:34px;border-radius:14px;background:var(--primary-50);flex:none">${p.emoji || '🍰'}</div>`;
+      ? `<img src="${escapeHTML(p.image)}" alt="${escapeHTML(p.name)}" style="width:72px;height:72px;border-radius:14px;object-fit:cover;flex:none;" onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';" /><div style="display:none;width:72px;height:72px;place-items:center;font-size:34px;border-radius:14px;background:var(--primary-50);flex:none;">${p.emoji || ''}</div>`
+      : `<div style="width:72px;height:72px;display:grid;place-items:center;font-size:34px;border-radius:14px;background:var(--primary-50);flex:none">${p.emoji || ''}</div>`;
 
     const body = el(`
       <div>
@@ -2638,7 +2679,7 @@
           
           <div style="display:flex; justify-content:center; gap:8px;">
             <button class="btn btn-primary btn-sm" type="button" id="btnUploadPhotoTrigger" style="font-size:12px; padding:7px 18px; font-weight:700;">
-              📷 เลือกรูปภาพจากเครื่อง
+              เลือกรูปภาพจากเครื่อง
             </button>
           </div>
         </div>
@@ -2707,12 +2748,12 @@
         previewImg.style.display = 'block';
         if (noPhotoPrompt) noPhotoPrompt.style.display = 'none';
         urlInp.value = currentImage;
-        toast('อัปโหลดรูปภาพสินค้าเรียบร้อย ✨', 'success');
+        toast('อัปโหลดรูปภาพสินค้าเรียบร้อย ', 'success');
       } catch (err) {
         toast('อัปโหลดไม่สำเร็จ: ' + (err.message || err), 'error');
       } finally {
         triggerBtn.disabled = false;
-        triggerBtn.textContent = '📷 เลือกรูปภาพจากเครื่อง';
+        triggerBtn.textContent = 'เลือกรูปภาพจากเครื่อง';
       }
     });
 
@@ -2746,7 +2787,7 @@
             if (customCat) {
               cat = customCat;
               if (!CATEGORIES.find(c => c.name.toLowerCase() === customCat.toLowerCase())) {
-                CATEGORIES.push({ name: customCat, count: 0, emoji: '🍰' });
+                CATEGORIES.push({ name: customCat, count: 0, emoji: '' });
               }
             } else {
               cat = 'Bakery';
@@ -2781,6 +2822,15 @@
                 toast('บันทึกไม่สำเร็จ: ' + error.message, 'error');
                 return;
               }
+            }
+            if (syncChannel) {
+              try {
+                syncChannel.send({
+                  type: 'broadcast',
+                  event: 'product_updated',
+                  payload: { id: existing.id, name, cat, image, price, stock, flavor, status }
+                });
+              } catch (e) {}
             }
             toast(`อัปเดตสินค้า "${name}" แล้ว`, 'success');
             renderPage();
@@ -2830,6 +2880,15 @@
             }
 
             PRODUCTS.unshift(newProd);
+            if (syncChannel) {
+              try {
+                syncChannel.send({
+                  type: 'broadcast',
+                  event: 'product_created',
+                  payload: newProd
+                });
+              } catch (e) {}
+            }
             toast(`สร้างสินค้า "${name}" สำเร็จ`, 'success');
             renderPage();
           }
@@ -2859,21 +2918,18 @@
       title: 'New Category',
       body: `
         <div class="grid" style="gap:12px">
-          <div class="field"><label>Category Name (ชื่อหมวดหมู่)</label><input class="input" id="newCatName" placeholder="e.g. Special Cakes, Coffee, Artisan Bread"/></div>
-          <div class="field"><label>Emoji Icon (อิโมจิประจำหมวดหมู่)</label><input class="input" id="newCatEmoji" placeholder="🧁" value="🧁"/></div>
+          <div class="field"><label>Category Name (ชื่อหมวดหมู่) *</label><input class="input" id="newCatName" placeholder="e.g. Special Cakes, Coffee, Artisan Bread"/></div>
         </div>`,
       actions: [
         { label: 'Cancel', kind: 'ghost' },
         { label: 'Create Category', kind: 'primary', onClick: async () => {
           const name = $('#newCatName')?.value.trim() || 'New Category';
-          const emoji = $('#newCatEmoji')?.value.trim() || '🧁';
           if (!CATEGORIES.find(c => c.name.toLowerCase() === name.toLowerCase())) {
-            CATEGORIES.push({ name, count: 0, emoji });
+            CATEGORIES.push({ name, count: 0 });
           }
           if (supabase) {
             const { error } = await supabase.from('categories').insert({
               name,
-              emoji,
               store_id: '00000000-0000-0000-0000-000000000001'
             });
             if (error) { toast('สร้างหมวดหมู่ไม่สำเร็จ: ' + error.message, 'error'); return; }
@@ -2906,7 +2962,7 @@
             return `
               <div class="card cat-card" style="padding:14px; border:1px solid var(--border); background:var(--card);" data-cat="${escapeHTML(c.name)}">
                 <div class="flex items-center" style="justify-content:space-between;">
-                  <div class="cat-emoji" style="font-size:24px; width:44px; height:44px;">${c.emoji}</div>
+                  <div style="width:40px; height:40px; border-radius:10px; background:var(--primary-50); color:var(--accent-text); display:grid; place-items:center; border:1px solid var(--border); font-weight:800; font-size:15px;">${escapeHTML(c.name.slice(0, 2).toUpperCase())}</div>
                   <span class="badge" style="background:var(--primary-50); font-weight:700;">${count} items</span>
                 </div>
                 <div style="margin-top:8px;">
@@ -2954,7 +3010,7 @@
                 <tr data-id="${p.id}">
                   <td>
                     <div style="width:42px; height:42px; border-radius:10px; overflow:hidden; background:var(--primary-50); display:grid; place-items:center; border:1px solid var(--border);">
-                      ${p.image ? `<img src="${escapeHTML(p.image)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='block';" /><span style="display:none; font-size:20px;">${p.emoji || '🍰'}</span>` : `<span style="font-size:20px;">${p.emoji || '🍰'}</span>`}
+                      <img src="${escapeHTML(p.image || DEFAULT_PRODUCT_IMG)}" alt="${escapeHTML(p.name)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.src='${DEFAULT_PRODUCT_IMG}';" />
                     </div>
                   </td>
                   <td>
@@ -3066,7 +3122,7 @@
       body: el(`
         <div class="grid" style="gap:14px;">
           <div style="background:var(--primary-50); padding:12px 14px; border-radius:14px; border:1px solid var(--border); display:flex; align-items:center; gap:12px;">
-            <div style="font-size:32px; width:46px; height:46px; display:grid; place-items:center; background:var(--card); border-radius:12px; border:1px solid var(--border); box-shadow:var(--shadow-soft);">${prod.emoji || '🍰'}</div>
+            <div style="font-size:32px; width:46px; height:46px; display:grid; place-items:center; background:var(--card); border-radius:12px; border:1px solid var(--border); box-shadow:var(--shadow-soft);">${prod.emoji || ''}</div>
             <div>
               <div style="font-weight:800; font-size:14.5px; color:var(--text);">${escapeHTML(prod.name)}</div>
               <div style="font-size:12px; color:var(--muted); margin-top:2px;">หมวดหมู่: ${escapeHTML(prod.cat || 'General')} · สต็อกปัจจุบัน: <strong style="color:var(--accent-text); font-size:13.5px;">${prod.stock} ชิ้น</strong></div>
@@ -3119,7 +3175,7 @@
             if (error) { toast('อัปเดตสต็อกไม่สำเร็จ: ' + error.message, 'error'); return; }
           }
 
-          toast(`ปรับสต็อกสินค้า "${target.name}" สำเร็จ (สต็อกคงเหลือ: ${target.stock} ชิ้น)✨`, 'success');
+          toast(`ปรับสต็อกสินค้า "${target.name}" สำเร็จ (สต็อกคงเหลือ: ${target.stock} ชิ้น)`, 'success');
           renderPage();
         }}
       ]
@@ -3969,8 +4025,8 @@
             </div>
             <div id="heroEmojiWrap" style="display:${heroIconType === 'emoji' ? 'block' : 'none'};">
               <div class="field" style="margin-bottom:0;">
-                <label style="font-size:11px;">ใส่อิโมจิแบนเนอร์ (เช่น 🥐, 🍰, 🌸, 🍞)</label>
-                <input class="input" id="setHeroEmoji" value="${escapeHTML(state.store.heroEmoji || '🥐')}" style="max-width:120px; font-size:18px; text-align:center;" />
+                <label style="font-size:11px;">ข้อความตัวอักษรย่อแบนเนอร์ (เช่น B, BN, HM)</label>
+                <input class="input" id="setHeroEmoji" value="${escapeHTML(state.store.heroEmoji || 'B')}" style="max-width:120px; font-size:18px; text-align:center;" />
               </div>
             </div>
             <div id="heroImageWrap" style="display:${heroIconType === 'image' ? 'block' : 'none'};">
@@ -4074,7 +4130,7 @@
                 <!-- Emoji / Letter Input -->
                 <div id="receiptLogoEmojiWrap" style="display:${currentReceiptLogoType !== 'image' ? 'block' : 'none'};">
                   <div class="field" style="margin-bottom:0;">
-                    <label style="font-size:11px;">อิโมจิหรือตัวอักษรโลโก้ (เช่น B, 🍰, 🌸, 🥐)</label>
+                    <label style="font-size:11px;">ตัวอักษรย่อโลโก้หัวสลิป (เช่น B, BN, HM)</label>
                     <input class="input" id="setReceiptLogoEmoji" value="${escapeHTML(state.store.receiptLogoEmoji || 'B')}" style="max-width:140px; text-align:center; font-size:18px; font-weight:800;" />
                   </div>
                 </div>
@@ -4122,8 +4178,8 @@
                 <!-- Footer Emoji Input -->
                 <div id="receiptFooterEmojiWrap" style="display:${currentReceiptFooterType === 'emoji' ? 'block' : 'none'}; margin-bottom:10px;">
                   <div class="field" style="margin-bottom:0;">
-                    <label style="font-size:11px;">ใส่อิโมจิท้ายกระดาษ (เช่น 🎀, 🛍️, 💖, 🧁)</label>
-                    <input class="input" id="setReceiptFooterEmoji" value="${escapeHTML(state.store.receiptFooterEmoji || '🎀')}" style="max-width:140px; text-align:center; font-size:18px;" />
+                    <label style="font-size:11px;">ใส่อิโมจิท้ายกระดาษ (เช่น , , , )</label>
+                    <input class="input" id="setReceiptFooterEmoji" value="${escapeHTML(state.store.receiptFooterEmoji || '')}" style="max-width:140px; text-align:center; font-size:18px;" />
                   </div>
                 </div>
 
@@ -4176,8 +4232,8 @@
                   ${currentReceiptFooterType === 'image' && currentReceiptFooterImage
                     ? `<div class="r-footer-graphic" style="width:80px;height:80px;margin:8px auto 4px;"><img src="${escapeHTML(currentReceiptFooterImage)}" style="width:100%;height:100%;object-fit:cover;" /></div>`
                     : currentReceiptFooterType === 'emoji'
-                    ? `<div class="r-footer-graphic" style="width:80px;height:80px;margin:8px auto 4px;font-size:36px;">${escapeHTML(state.store.receiptFooterEmoji || '🎀')}</div>`
-                    : `<div class="r-footer-graphic" style="width:80px;height:80px;margin:8px auto 4px;font-size:36px;">🎀</div>`}
+                    ? `<div class="r-footer-graphic" style="width:80px;height:80px;margin:8px auto 4px;font-size:36px;">${escapeHTML(state.store.receiptFooterEmoji || '')}</div>`
+                    : `<div class="r-footer-graphic" style="width:80px;height:80px;margin:8px auto 4px;font-size:36px;"></div>`}
                 </div>
                 <div id="prevRFooterMsg" style="text-align:center; font-family:'Sunshiney', cursive; font-size:18px; font-weight:700; color:var(--accent-text); margin-top:6px; line-height:1.2;">${escapeHTML(state.store.receiptFooterMsg || 'Thank you for your order')}</div>
                 <div id="prevRFooterSub" style="text-align:center; font-size:10px; color:var(--muted); margin-top:2px;">${escapeHTML(state.store.receiptFooterSub || '')}</div>
@@ -4242,13 +4298,13 @@
 
         <!-- SECTION 8: Sticky Note Customization (ตั้งค่าโทนสีกระดาษสติกกี้โน้ตปักหมุด) -->
         <div class="card">
-          <div class="card-title">📌 Sticky Note Customization (ตั้งค่าโทนสีกระดาษสติกกี้โน้ตปักหมุด)</div>
+          <div class="card-title">Sticky Note Customization (ตั้งค่าโทนสีกระดาษสติกกี้โน้ตปักหมุด)</div>
           <div class="card-sub">เลือกโทนสีพาสเทลสำเร็จรูป หรือปรับแต่งสีกระดาษ สีขอบ และสีหมุดปักของรีวิวที่ปักหมุดได้ตามใจชอบ</div>
 
           <div class="grid two-col" style="gap:16px; margin-top:14px;">
             <!-- Left Column: Preset Palettes & Custom Pickers -->
             <div style="background:var(--primary-50); padding:16px; border-radius:14px; border:1px solid var(--border);">
-              <div style="font-weight:700; font-size:13.5px; margin-bottom:8px; color:var(--text);">🌸 โทนสีสว่างพาสเทล (Light Presets - 6 แบบ)</div>
+              <div style="font-weight:700; font-size:13.5px; margin-bottom:8px; color:var(--text);">โทนสีสว่างพาสเทล (Light Presets - 6 แบบ)</div>
               <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap:8px; margin-bottom:14px;" id="stickyPresetListLight">
                 ${Object.entries(STICKY_NOTE_PALETTES).filter(([_, p]) => p.category === 'light').map(([k, p]) => `
                   <button type="button" class="btn-sticky-preset" data-k="${k}" style="background:${p.bg}; border:1.5px solid ${p.border}; border-bottom:3px solid ${p.bottom}; padding:8px 10px; border-radius:12px; text-align:left; cursor:pointer; display:flex; align-items:center; gap:8px; transition:all .15s ease; box-shadow:var(--shadow-soft);">
@@ -4258,7 +4314,7 @@
                 `).join('')}
               </div>
 
-              <div style="font-weight:700; font-size:13.5px; margin-bottom:8px; color:var(--text);">🌙 โทนสีมืดพรีเมียม (Dark Presets - 6 แบบ)</div>
+              <div style="font-weight:700; font-size:13.5px; margin-bottom:8px; color:var(--text);">โทนสีมืดพรีเมียม (Dark Presets - 6 แบบ)</div>
               <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap:8px; margin-bottom:14px;" id="stickyPresetListDark">
                 ${Object.entries(STICKY_NOTE_PALETTES).filter(([_, p]) => p.category === 'dark').map(([k, p]) => `
                   <button type="button" class="btn-sticky-preset" data-k="${k}" style="background:${p.bg}; border:1.5px solid ${p.border}; border-bottom:3px solid ${p.bottom}; padding:8px 10px; border-radius:12px; text-align:left; cursor:pointer; display:flex; align-items:center; gap:8px; transition:all .15s ease; box-shadow:var(--shadow-soft);">
@@ -4433,7 +4489,7 @@
               <div style="flex:1; min-width:240px;">
                 <input type="file" id="fileQrPayment" accept="image/*" style="display:none;" />
                 <div class="flex gap-2 items-center" style="margin-bottom:8px;">
-                  <button type="button" class="btn btn-sm btn-primary" id="btnUploadQrPayment" style="font-size:12px; padding:6px 14px; font-weight:700;">📷 อัปโหลดรูป QR Code พร้อมเพย์</button>
+                  <button type="button" class="btn btn-sm btn-primary" id="btnUploadQrPayment" style="font-size:12px; padding:6px 14px; font-weight:700;">อัปโหลดรูป QR Code พร้อมเพย์</button>
                   <button type="button" class="btn btn-sm btn-ghost" id="btnClearQrPayment" style="font-size:12px; padding:6px 10px; color:var(--danger); display:${currentQrPaymentImage ? 'inline-block' : 'none'};">ลบรูป QR</button>
                 </div>
                 <div class="field" style="margin-bottom:0;">
@@ -4544,7 +4600,7 @@
             <div class="grid" style="grid-template-columns:${h.iconType === 'image' ? '1fr' : '54px 1fr'}; gap:8px;">
               <div class="field hl-emoji-box" style="margin:0; display:${h.iconType === 'image' ? 'none' : 'block'};">
                 <label style="font-size:11px;">ไอคอน</label>
-                <input class="input set-h-icon" value="${escapeHTML(h.icon || '✨')}" style="text-align:center; font-size:16px; padding:6px;" />
+                <input class="input set-h-icon" value="${escapeHTML(h.icon || '')}" style="text-align:center; font-size:16px; padding:6px;" />
               </div>
               <div class="field" style="margin:0;">
                 <label style="font-size:11px;">หัวข้อ</label>
@@ -4661,7 +4717,7 @@
       const emojiVal = formWrap.querySelector('#setReceiptLogoEmoji')?.value.trim() || 'B';
       const storeVal = formWrap.querySelector('#setReceiptStoreName')?.value.trim() || 'BNC HayMate Bakery';
       const addressVal = formWrap.querySelector('#setReceiptStoreAddress')?.value.trim() || '14 Sukhumvit Rd · Bangkok';
-      const footerEmojiVal = formWrap.querySelector('#setReceiptFooterEmoji')?.value.trim() || '🎀';
+      const footerEmojiVal = formWrap.querySelector('#setReceiptFooterEmoji')?.value.trim() || '';
       const footerMsgVal = formWrap.querySelector('#setReceiptFooterMsg')?.value.trim() || 'Thank you for your order';
       const footerSubVal = formWrap.querySelector('#setReceiptFooterSub')?.value.trim() || '';
 
@@ -4681,7 +4737,7 @@
         } else if (currentReceiptFooterType === 'emoji') {
           prevFooterGraphic.innerHTML = `<div class="r-footer-graphic" style="width:80px;height:80px;margin:8px auto 4px;font-size:36px;">${escapeHTML(footerEmojiVal)}</div>`;
         } else {
-          prevFooterGraphic.innerHTML = `<div class="r-footer-graphic" style="width:80px;height:80px;margin:8px auto 4px;font-size:36px;">🎀</div>`;
+          prevFooterGraphic.innerHTML = `<div class="r-footer-graphic" style="width:80px;height:80px;margin:8px auto 4px;font-size:36px;"></div>`;
         }
       }
       if (prevFooterMsg) prevFooterMsg.textContent = footerMsgVal;
@@ -4960,7 +5016,7 @@
         toast('อัปโหลดไม่สำเร็จ: ' + (err.message || err), 'error');
       } finally {
         btnUploadQrPayment.disabled = false;
-        btnUploadQrPayment.textContent = '📷 อัปโหลดรูป QR Code พร้อมเพย์';
+        btnUploadQrPayment.textContent = 'อัปโหลดรูป QR Code พร้อมเพย์';
       }
     });
 
@@ -5039,12 +5095,12 @@
       state.store.heroSub = formWrap.querySelector('#setHeroSub')?.value.trim() || 'Handmade cakes, pastries, and rose-scented drinks.';
       state.store.heroBtnText = formWrap.querySelector('#setHeroBtnText')?.value.trim() || 'Shop Menu (320 items)';
       state.store.heroIconType = heroIconType;
-      state.store.heroEmoji = formWrap.querySelector('#setHeroEmoji')?.value.trim() || '🥐';
+      state.store.heroEmoji = formWrap.querySelector('#setHeroEmoji')?.value.trim() || '';
       state.store.heroImage = (heroImage && !heroImage.startsWith('(Uploaded')) ? heroImage : (heroUrlInp?.value && heroUrlInp.value !== '(Uploaded Photo)' && heroUrlInp.value.startsWith('http') ? heroUrlInp.value : heroImage);
 
       state.store.highlights = currentHighlights.map(h => ({
         iconType: h.iconType || 'emoji',
-        icon: h.icon || '✨',
+        icon: h.icon || '',
         image: h.image || '',
         title: h.title || '',
         sub: h.sub || ''
@@ -5061,19 +5117,19 @@
       state.store.receiptStoreAddress = formWrap.querySelector('#setReceiptStoreAddress')?.value.trim() || '14 Sukhumvit Rd · Bangkok';
       state.store.receiptFooterType = currentReceiptFooterType;
       state.store.receiptFooterImage = (currentReceiptFooterImage && !currentReceiptFooterImage.startsWith('(Uploaded')) ? currentReceiptFooterImage : (footerUrlInp?.value && footerUrlInp.value !== '(Uploaded Photo)' && footerUrlInp.value.startsWith('http') ? footerUrlInp.value : currentReceiptFooterImage);
-      state.store.receiptFooterEmoji = formWrap.querySelector('#setReceiptFooterEmoji')?.value.trim() || '🎀';
+      state.store.receiptFooterEmoji = formWrap.querySelector('#setReceiptFooterEmoji')?.value.trim() || '';
       state.store.receiptFooterMsg = formWrap.querySelector('#setReceiptFooterMsg')?.value.trim() || 'Thank you for your order';
       state.store.receiptFooterSub = formWrap.querySelector('#setReceiptFooterSub')?.value.trim() || '';
 
       // Tracking Review Calligraphy & Star Labels Save (STARS PRESERVED)
       state.store.trackingReviewTitle = formWrap.querySelector('#setTrackingTitle')?.value.trim() || 'BNC HayMate Bakery';
       state.store.trackingReviewSub = formWrap.querySelector('#setTrackingSub')?.value.trim() || 'Thank you for your support';
-      state.store.trackingReviewBtnText = formWrap.querySelector('#setTrackingBtnText')?.value.trim() || '⭐ เขียนรีวิว & ให้คะแนนร้าน';
+      state.store.trackingReviewBtnText = formWrap.querySelector('#setTrackingBtnText')?.value.trim() || 'เขียนรีวิวและให้คะแนนร้านค้า';
       state.store.starLabel1 = formWrap.querySelector('#setStarLabel1')?.value.trim() || '1 ดาว - ต้องปรับปรุง';
       state.store.starLabel2 = formWrap.querySelector('#setStarLabel2')?.value.trim() || '2 ดาว - พอใช้ได้';
       state.store.starLabel3 = formWrap.querySelector('#setStarLabel3')?.value.trim() || '3 ดาว - ปานกลาง / รสชาติดี';
       state.store.starLabel4 = formWrap.querySelector('#setStarLabel4')?.value.trim() || '4 ดาว - อร่อยและประทับใจมาก';
-      state.store.starLabel5 = formWrap.querySelector('#setStarLabel5')?.value.trim() || '5 ดาว - ประทับใจมากที่สุด ยอดเยี่ยม! ⭐⭐⭐⭐⭐';
+      state.store.starLabel5 = formWrap.querySelector('#setStarLabel5')?.value.trim() || '5 ดาว - ประทับใจมากที่สุด ยอดเยี่ยม!';
 
       // Save Stock Threshold Settings
       state.store.stockLowThreshold = Math.max(1, Number(formWrap.querySelector('#setStockLowThreshold')?.value || 100));
@@ -5324,7 +5380,7 @@
       });
     }
 
-    const executeReset = () => {
+    const executeReset = async () => {
       const isMatch = (enteredCode === currentPin || enteredCode === '123456' || enteredCode === '202408');
 
       if (!isMatch) {
@@ -5338,7 +5394,35 @@
         return;
       }
 
-      // 1. Clear all local storage keys
+      // 1. Wipe Supabase tables so other devices and next reloads see empty data
+      if (supabase) {
+        try {
+          await Promise.allSettled([
+            supabase.from('order_items').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+            supabase.from('orders').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+            supabase.from('reviews').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+            supabase.from('promotions').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+            supabase.from('products').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+            supabase.from('customers').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+            supabase.from('stock_movements').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+          ]);
+        } catch (dbErr) {
+          console.warn('Supabase reset warning:', dbErr);
+        }
+      }
+
+      // 2. Broadcast system_reset event to all connected devices in realtime
+      if (syncChannel) {
+        try {
+          syncChannel.send({
+            type: 'broadcast',
+            event: 'system_reset',
+            payload: { timestamp: Date.now() }
+          });
+        } catch (e) {}
+      }
+
+      // 3. Clear all local storage keys
       const keysToClear = [
         'haypos_orders', 'haypos_customers', 'haypos_products', 'haypos_reviews',
         'haypos_promotions', 'haypos_store_settings', 'haypos_cart', 'haypos_banners',
@@ -5348,7 +5432,7 @@
         try { localStorage.removeItem(k); } catch (e) {}
       });
 
-      // 2. Reset in-memory data to completely empty blank slate
+      // 4. Reset in-memory data to completely empty blank slate
       ORDERS = [];
       CUSTOMERS = [];
       REVIEWS = [];
@@ -5384,7 +5468,7 @@
       applyStickyNoteTheme();
 
       closeModal();
-      toast('ล้างข้อมูลระบบทั้งหมดเป็นค่าว่างเรียบร้อยแล้ว ✨', 'success');
+      toast('ล้างข้อมูลระบบทุกตารางในฐานข้อมูลและทุกเครื่องเรียบร้อยแล้ว', 'success');
       renderMenu();
       renderPage();
     };
@@ -5432,7 +5516,7 @@
     document.addEventListener('keydown', handleKeydown);
 
     openModal({
-      title: '🚨 ล้างข้อมูลระบบทั้งหมด (Factory Reset)',
+      title: 'ล้างข้อมูลระบบทั้งหมด (Factory Reset)',
       body,
       actions: [
         { label: 'ยกเลิก (Cancel)', kind: 'ghost', onClick: () => document.removeEventListener('keydown', handleKeydown) },
@@ -5619,7 +5703,7 @@
         // 2. Compact Hero Banner (Dynamic from state.store - supports Image or Emoji)
         const heroGraphicHtml = (state.store.heroIconType === 'image' && state.store.heroImage)
           ? `<img src="${escapeHTML(state.store.heroImage)}" alt="Hero" style="width:38px; height:38px; object-fit:contain; border-radius:10px; display:block;" onerror="this.style.display='none';" />`
-          : `<div style="font-size:28px;">${escapeHTML(state.store.heroEmoji || '🥐')}</div>`;
+          : `<div style="font-size:28px;">${escapeHTML(state.store.heroEmoji || '')}</div>`;
 
         const compactHero = el(`
           <div class="store-hero">
@@ -5648,7 +5732,7 @@
             ${hList.map(h => {
               const iconHtml = (h.iconType === 'image' && h.image)
                 ? `<img src="${escapeHTML(h.image)}" alt="${escapeHTML(h.title)}" style="width:24px; height:24px; object-fit:contain; border-radius:6px; display:inline-block;" onerror="this.style.display='none';" />`
-                : `<span class="icon">${escapeHTML(h.icon || '✨')}</span>`;
+                : `<span class="icon">${escapeHTML(h.icon || '')}</span>`;
               return `
                 <div class="card stat">
                   <div class="row"><span class="label">${escapeHTML(h.title)}</span>${iconHtml}</div>
@@ -5754,7 +5838,7 @@
               </div>
             ` : `
               <div class="empty" style="padding: 24px; text-align: center; color: var(--muted); background: var(--primary-50); border-radius: 12px; border: 1px dashed var(--border);">
-                <div style="font-size: 28px; margin-bottom: 6px;">💌</div>
+                <div style="font-size: 28px; margin-bottom: 6px;"></div>
                 <div style="font-weight: 700; font-size: 13.5px; color: var(--text);">ยังไม่มีรีวิวในขณะนี้</div>
                 <div style="font-size: 12px; margin-top: 2px;">เมื่อลูกค้าสั่งซื้อสินค้า สามารถเป็นคนแรกที่เขียนรีวิวให้ร้านค้าได้เลย!</div>
               </div>
@@ -6295,8 +6379,8 @@
 
         const footerType = state.store.receiptFooterType || 'qr';
         const footerImage = state.store.receiptFooterImage || '';
-        const footerEmoji = state.store.receiptFooterEmoji || '🎀';
-        const footerMsg = state.store.receiptFooterMsg || 'Thank you for your order 💗';
+        const footerEmoji = state.store.receiptFooterEmoji || '';
+        const footerMsg = state.store.receiptFooterMsg || 'Thank you for your order ';
         const footerSub = state.store.receiptFooterSub || '';
 
         const logoHtml = (logoType === 'image' && logoImage)
