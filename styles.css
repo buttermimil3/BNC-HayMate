@@ -1,44 +1,57 @@
 /* HayPOS / BNC HayMate styles */
-:root{
-  --primary:#F8BFD4;
-  --primary-600:#EFA6C1;
-  --primary-700:#DE85A7;
-  --primary-100:#FCE3EE;
-  --primary-50:#FDF1F6;
-  --secondary:#FFFFFF;
-  --bg:#FFF8FB;
-  --card:#FFFFFF;
-  --border:#F3DCE6;
-  --text:#333333;
-  --muted:#777777;
-  --accent-text:#B24C74;
-  --success:#7CC59A;
-  --warning:#F0B265;
-  --danger:#E58B94;
-  --info:#8BB6E8;
-  --radius:18px;
-  --radius-sm:12px;
-  --shadow: 0 6px 20px rgba(248,191,212,0.22);
-  --shadow-soft: 0 2px 10px rgba(248,191,212,0.12);
-  --font: 'Plus Jakarta Sans','DM Sans', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+*, *::before, *::after {
+  box-sizing: border-box;
 }
-[data-theme="dark"]{
-  --bg:#1B1418;
-  --card:#241A20;
-  --border:#3E2732;
-  --text:#F4E8EE;
-  --muted:#B39BA6;
-  --accent-text:#F8BFD4;
-  --primary-50:#2B1E25;
-  --primary-100:#3A2530;
-  --primary-600:#EFA6C1;
-  --primary-700:#DE85A7;
-  --shadow: 0 6px 20px rgba(0,0,0,0.4);
-  --shadow-soft: 0 2px 10px rgba(0,0,0,0.25);
+
+:root {
+  /* Dynamic Accent Defaults (Pastel Pink) */
+  --primary: #F8BFD4;
+  --primary-600: #EFA6C1;
+  --primary-700: #DE85A7;
+  --primary-100: #FCE3EE;
+  --primary-50: #FDF1F6;
+  --accent-text: #B24C74;
+
+  /* Semantic Status Colors */
+  --success: #7CC59A;
+  --warning: #F0B265;
+  --danger: #E58B94;
+  --info: #8BB6E8;
+
+  /* Light Theme (Single Source of Truth) */
+  --bg: #FFF8FB;
+  --card: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-2: #FDF1F6;
+  --border: #F3DCE6;
+  --divider: #F3DCE6;
+  --text: #2D3748;
+  --text-secondary: #4A5568;
+  --muted: #718096;
+
+  /* Geometry & Typography */
+  --radius: 18px;
+  --radius-sm: 12px;
+  --font: 'Plus Jakarta Sans', 'DM Sans', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Shadows */
+  --shadow: 0 4px 20px rgba(248, 191, 212, 0.22);
+  --shadow-soft: 0 2px 10px rgba(248, 191, 212, 0.12);
 }
-*{box-sizing:border-box}
-html,body{margin:0;padding:0}
-body{
+
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+body {
   font-family: var(--font);
   background: var(--bg);
   color: var(--text);
@@ -46,22 +59,25 @@ body{
   font-size: 14px;
   line-height: 1.5;
 }
-button{font-family:inherit}
-a{color:inherit;text-decoration:none}
-input,select,textarea{font-family:inherit;color:inherit}
+button { font-family: inherit; }
+a { color: inherit; text-decoration: none; }
+input, select, textarea { font-family: inherit; color: inherit; }
 
 /* Layout */
-.app{
-  display:grid;
+.app {
+  display: grid;
   grid-template-columns: 260px 1fr;
-  min-height:100vh;
+  min-height: 100vh;
+  background: var(--bg);
+  transition: grid-template-columns .22s ease, background-color 0.22s ease;
 }
-.sidebar{
+.sidebar {
   background: var(--card);
   border-right: 1px solid var(--border);
   padding: 22px 16px;
-  display:flex; flex-direction:column;
-  position: sticky; top:0; height:100vh;
+  display: flex; flex-direction: column;
+  position: sticky; top: 0; height: 100vh;
+  transition: background-color 0.22s ease, border-color 0.22s ease;
 }
 .brand{display:flex; align-items:center; gap:12px; padding: 0 8px 22px; cursor:pointer;}
 .brand-mark{
@@ -110,8 +126,13 @@ input,select,textarea{font-family:inherit;color:inherit}
 .side-card-sub{font-size:12px; color:var(--muted); margin-bottom:10px}
 
 /* Main */
-.main{display:flex;flex-direction:column;min-width:0}
-.app{transition:grid-template-columns .22s ease}
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg);
+  transition: background-color 0.22s ease;
+}
 .app.collapsed{grid-template-columns:80px 1fr}
 .app.collapsed .sidebar{padding:22px 10px; align-items:center}
 .app.collapsed .brand-name,
@@ -120,12 +141,13 @@ input,select,textarea{font-family:inherit;color:inherit}
 .app.collapsed .brand{padding:0 0 22px 0; justify-content:center}
 .app.collapsed .menu-item{justify-content:center; padding:12px}
 
-.topbar{
-  position: sticky; top:0; z-index:20;
+.topbar {
+  position: sticky; top: 0; z-index: 20;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
   padding: 14px 24px;
-  display:flex; align-items:center; gap:16px;
+  display: flex; align-items: center; gap: 16px;
+  transition: background-color 0.22s ease, border-color 0.22s ease;
 }
 .menu-toggle{display:grid; place-items:center; cursor:pointer}
 .icon-btn{
@@ -285,8 +307,11 @@ input,select,textarea{font-family:inherit;color:inherit}
 .user-role{font-size:11px; color:var(--muted)}
 
 /* Page */
-.page{
+.page {
   padding: 26px;
+  background: var(--bg);
+  min-height: calc(100vh - 65px);
+  transition: background-color 0.22s ease;
   animation: fadeIn .08s ease-out;
 }
 @keyframes fadeIn{from{opacity:0.9;} to{opacity:1;}}
@@ -324,8 +349,8 @@ input,select,textarea{font-family:inherit;color:inherit}
   box-shadow: 0 6px 18px var(--primary-100);
 }
 .btn-ghost{background: transparent}
-.btn-danger{background:#FDE3E6; color:#B45B65; border-color:#F6C9CE}
-.btn-danger:hover{background:#F9CFD4}
+.btn-danger{background: rgba(229, 139, 148, 0.15); color: var(--danger); border-color: rgba(229, 139, 148, 0.35);}
+.btn-danger:hover{background: rgba(229, 139, 148, 0.25);}
 .btn-sm{padding:7px 12px; font-size:12px; border-radius:10px}
 .btn-block{display:flex; width:100%; justify-content:center}
 
@@ -433,7 +458,7 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
   border-radius: 14px;
   border: 1.5px solid var(--border);
   background-color: var(--card);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23B24C74' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 14px center;
   background-size: 14px;
@@ -486,16 +511,17 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
   aspect-ratio: 1/1;
   border-radius: 12px;
   background: var(--card);
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border);
   display:grid; place-items:center;
   font-size: 26px;
   cursor: pointer;
   user-select: none;
-  overflow: visible;
+  overflow: hidden;
+  box-sizing: border-box;
   transition: transform .15s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease;
 }
 .product-tile img{
-  width: 100%; height: 100%; object-fit: cover; border-radius: 11px; display: block;
+  width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;
 }
 .product-tile:hover{
   background: var(--primary-50);
@@ -509,24 +535,22 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
 }
 .product-tile.out{opacity:.4}
 .product-tile .qty-badge{
-  position:absolute; top:-7px; right:-7px;
-  min-width:22px; height:22px;
-  padding: 0 5px;
-  border-radius: 999px;
+  position:absolute; top:3px; right:3px;
+  min-width:18px; height:18px;
+  padding: 0 4px;
+  border-radius: 6px;
   background: var(--primary-600);
   color:#fff;
-  font-size:11.5px; font-weight:800;
+  font-size:10.5px; font-weight:800;
   display:none; align-items:center; justify-content:center;
-  box-shadow: 0 3px 8px rgba(239, 166, 193, 0.6);
-  border: 2.5px solid var(--card);
-  animation: pop .25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  border: 1.5px solid var(--card);
   z-index: 10;
   pointer-events: none;
 }
 .product-tile.selected .qty-badge{display:flex}
-@keyframes pop{ from{transform:scale(.4); opacity:0} to{transform:scale(1); opacity:1} }
 .product-tile .stock-dot{
-  position:absolute; bottom:5px; right:5px;
+  position:absolute; bottom:4px; right:4px;
   width:6px; height:6px; border-radius:50%;
   background: var(--success);
   z-index: 2;
@@ -548,6 +572,7 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
   width:52px;height:52px;border-radius:16px;
   background: var(--primary-50);
   display:grid; place-items:center; font-size:24px;
+  box-sizing: border-box; flex-shrink: 0;
 }
 .cat-name{font-weight:700; font-size:15px}
 .cat-count{font-size:12px; color:var(--muted)}
@@ -556,10 +581,73 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
 
 /* Reviews */
 .reviews-grid{
-  display:grid; gap:16px;
-  grid-template-columns: repeat(auto-fill, minmax(300px,1fr));
+  display:grid; gap:20px;
+  grid-template-columns: repeat(auto-fill, minmax(290px,1fr));
+  padding-top: 10px;
 }
-.review-card{padding:18px; display:flex; flex-direction:column; gap:10px}
+.review-card{
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 18px;
+  padding: 20px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: var(--shadow-soft);
+  transition: transform .22s cubic-bezier(0.2, 0.8, 0.4, 1), box-shadow .22s ease;
+  position: relative;
+}
+
+/* Pinned Sticky Note Aesthetic - Configurable via Settings */
+.review-card.pinned-sticky {
+  background: var(--sticky-bg, #FFFDF2);
+  border: 1.5px solid var(--sticky-border, #EFE6C7);
+  border-bottom: 3.5px solid var(--sticky-bottom-border, #DFD2A8);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05), 0 1px 4px rgba(0, 0, 0, 0.03);
+  z-index: 2;
+  padding-top: 24px;
+}
+
+
+/* Alternating subtle sticky note rotation: Left tilt & Right tilt */
+.review-card.pinned-sticky.tilt-left {
+  transform: rotate(-1.8deg) translateY(-1px);
+}
+.review-card.pinned-sticky.tilt-right {
+  transform: rotate(1.6deg) translateY(-1px);
+}
+
+.review-card.pinned-sticky:hover {
+  transform: rotate(0deg) scale(1.02) translateY(-3px) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.05);
+  z-index: 5;
+}
+
+/* Sticky Pin Header Badge - Positioned cleanly right on top edge */
+.sticky-pin-badge {
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--sticky-pin-bg, #EFA6C1);
+  color: #FFFFFF;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 3px 12px;
+  border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  letter-spacing: 0.3px;
+  z-index: 3;
+  white-space: nowrap;
+}
+.sticky-pin-badge svg {
+  width: 11px;
+  height: 11px;
+}
+
 .review-head{display:flex; align-items:center; gap:12px}
 .review-head .avatar{width:40px;height:40px;border-radius:12px}
 .review-name{font-weight:700}
@@ -635,7 +723,7 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
 }
 .toast .t-icon{
   width:28px;height:28px;border-radius:9px;
-  background: var(--primary-50); color:#B24C74;
+  background: var(--primary-50); color: var(--accent-text);
   display:grid; place-items:center; font-weight:700;
 }
 .toast.success .t-icon{background:#DFF3E8; color:#3F8E63}
@@ -648,7 +736,7 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
 }
 .empty .icon{
   width:60px;height:60px;border-radius:20px;
-  background:var(--primary-50); color:#B24C74;
+  background:var(--primary-50); color: var(--accent-text);
   display:grid; place-items:center; margin: 0 auto 12px;
 }
 
@@ -690,10 +778,9 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
 .qa-item:hover{background: var(--primary-100); transform: translateY(-2px)}
 .qa-item .qa-icon{
   width:34px;height:34px;border-radius:10px;
-  background: #fff; color:#B24C74; display:grid; place-items:center;
-  flex:none;
+  background: var(--card); color: var(--accent-text); display:grid; place-items:center;
+  flex:none; border: 1px solid var(--border);
 }
-[data-theme="dark"] .qa-item .qa-icon{background:#3A2530}
 .qa-item .qa-txt{font-size:13px; font-weight:600}
 .qa-item .qa-sub{font-size:11px; color:var(--muted); font-weight:500}
 
@@ -876,7 +963,7 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
   width: 330px;
   max-width: 88vw;
   height: 26px;
-  background: #FFFFFF;
+  background: var(--card);
   border: 2px solid var(--border);
   border-radius: 999px;
   box-shadow: 0 4px 16px var(--primary-100), 0 1px 6px var(--shadow-soft);
@@ -885,10 +972,6 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
   overflow: hidden;
   box-sizing: border-box;
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
-}
-[data-theme="dark"] .loading-tube {
-  background: #201728;
-  border-color: var(--border);
 }
 .loading-fill {
   height: 100%;
@@ -968,40 +1051,54 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
   .receipt .r-logo{width: 52px; height: 52px; font-size: 22px;}
 }
 
-/* 6-Digit PIN Phone Lock Screen Modal */
-.pin-modal-card {
+/* 6-Digit PIN Cute Calculator Modal & Keypad */
+.pin-modal-card, .calc-pin-card {
   text-align: center;
-  max-width: 340px;
+  max-width: 320px;
   margin: 0 auto;
-  padding: 10px 6px;
+  padding: 8px 4px 4px;
 }
-.pin-lock-icon {
-  width: 52px; height: 52px; border-radius: 16px;
+.pin-lock-icon, .calc-lock-icon {
+  width: 48px; height: 48px; border-radius: 14px;
   background: var(--primary-50); color: var(--accent-text);
-  display: grid; place-items: center; font-size: 24px;
-  margin: 0 auto 12px; border: 1.5px solid var(--border);
+  display: grid; place-items: center; font-size: 22px;
+  margin: 0 auto 10px; border: 1.5px solid var(--border);
   box-shadow: var(--shadow-soft);
 }
-.pin-title { font-size: 19px; font-weight: 800; margin: 0 0 4px; color: var(--text); }
-.pin-sub { font-size: 12.5px; color: var(--muted); margin: 0 0 20px; }
+.pin-title, .calc-pin-title { font-size: 18.5px; font-weight: 800; margin: 0 0 2px; color: var(--text); }
+.pin-sub, .calc-pin-sub { font-size: 12px; color: var(--muted); margin: 0 0 16px; }
 
-.pin-dots {
-  display: flex; justify-content: center; gap: 14px;
-  margin-bottom: 24px;
-}
-.pin-dot {
-  width: 15px; height: 15px; border-radius: 50%;
+/* Calculator Display Screen: Rounded Rectangle with soft inset effect */
+.calc-screen {
+  background: var(--primary-50);
   border: 2px solid var(--border);
-  background: transparent;
-  transition: all .18s ease;
+  border-radius: 18px;
+  padding: 16px 14px;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.08);
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
 }
-.pin-dot.filled {
+
+.pin-dots, .calc-dots {
+  display: flex; justify-content: center; align-items: center; gap: 12px;
+  margin: 0;
+}
+.pin-dot, .calc-dot {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--card);
+  transition: all .16s ease;
+}
+.pin-dot.filled, .calc-dot.filled {
   background: var(--primary-600);
   border-color: var(--primary-600);
-  box-shadow: 0 0 10px var(--primary-100);
-  transform: scale(1.15);
+  box-shadow: 0 0 6px var(--primary-100);
 }
-.pin-dot.error {
+.pin-dot.error, .calc-dot.error {
   border-color: var(--danger) !important;
   background: var(--danger) !important;
   box-shadow: 0 0 12px rgba(229, 139, 148, 0.4);
@@ -1013,36 +1110,58 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
   40%, 80% { transform: translateX(8px); }
 }
 
-.pin-keypad {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 12px; justify-items: center; max-width: 250px; margin: 0 auto;
+/* Calculator Circle Keypad with Perfectly Centered Digits */
+.pin-keypad, .calc-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px 16px;
+  max-width: 250px;
+  margin: 0 auto;
+  justify-items: center;
+  align-items: center;
 }
-.pin-key {
-  width: 64px; height: 64px; border-radius: 50%;
-  border: 1.5px solid var(--border); background: var(--card);
-  font-size: 24px; font-weight: 700; color: var(--text);
-  display: grid; place-items: center; cursor: pointer;
+.pin-key, .calc-key {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--card);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  line-height: 1;
+  padding: 0;
+  margin: 0 auto;
+  cursor: pointer;
   user-select: none;
-  transition: all .15s ease;
-  box-shadow: var(--shadow-soft);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03);
 }
-.pin-key:hover {
+.pin-key:hover, .calc-key:hover {
   background: var(--primary-50);
   border-color: var(--primary-600);
-  box-shadow: 0 4px 14px var(--primary-100);
+  box-shadow: 0 6px 14px var(--primary-100);
   transform: translateY(-2px);
 }
-.pin-key:active {
+.pin-key:active, .calc-key:active {
   background: var(--primary-100);
   transform: scale(0.92);
 }
-.pin-key-action {
-  font-size: 13.5px; font-weight: 600; color: var(--muted);
-  border: none; background: transparent; box-shadow: none;
-}
-.pin-key-action:hover {
+.pin-key-action, .calc-key-action {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--accent-text);
   background: var(--primary-50);
-  color: var(--text);
+  border-color: var(--border);
+}
+.pin-key-del, .calc-key-del {
+  font-size: 16px;
+  color: var(--danger);
+  background: var(--primary-50);
+  border-color: var(--border);
 }
 
 /* Auth Modal (Sign In / Sign Up) */
@@ -1110,9 +1229,9 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.96);
+  background: var(--card);
   border: 1px solid var(--border);
-  color: #333;
+  color: var(--text);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -1120,11 +1239,13 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
   font-size: 20px;
   font-weight: 800;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.22);
 }
 .carousel-btn:hover {
-  background: #ffffff;
-  transform: translateY(-50%) scale(1.1);
+  background: var(--primary-50);
+  color: var(--accent-text);
+  border-color: var(--primary-600);
+  transform: translateY(-50%) scale(1.08);
 }
 .carousel-btn.prev { left: 14px; }
 .carousel-btn.next { right: 14px; }
@@ -1150,4 +1271,34 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
   background: var(--primary-600);
   box-shadow: 0 0 8px var(--primary-600);
 }
+
+/* Cute Rounded Hearts Rating */
+.heart-icon {
+  display: inline-block;
+  vertical-align: middle;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.18s ease;
+}
+.heart-icon.active {
+  filter: drop-shadow(0 2px 4px rgba(233, 30, 99, 0.28));
+}
+#heartPicker span:hover {
+  transform: scale(1.25) !important;
+}
+
+/* Custom Smooth Theme Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-600);
+}
+
 
