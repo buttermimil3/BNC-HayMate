@@ -2444,6 +2444,7 @@
 
       pageItems.forEach(p => {
         const stockCls = p.stock === 0 ? 'out' : p.stock < 10 ? 'low' : '';
+        const qty = state.selected[p.id] || 0;
         const imgUrl = p.image || DEFAULT_PRODUCT_IMG;
         const mediaHtml = `<img src="${escapeHTML(imgUrl)}" alt="${escapeHTML(p.name)}" onerror="this.src='${DEFAULT_PRODUCT_IMG}';" />`;
         const tile = el(`
@@ -2547,24 +2548,72 @@
     body.querySelector('#pqEdit').addEventListener('click', () => { closeModal(); openAddProductModal(p); });
     body.querySelector('#pqStock').addEventListener('click', () => {
       closeModal();
-      openModal({
-        title: `Restock ${p.name}`,
-        body: `<div class="field"><label>New Stock Quantity</label><input type="number" id="adjStockInput" class="input" value="${p.stock}"/></div>`,
-        actions: [
-          { label: 'Cancel', kind: 'ghost' },
-          { label: 'Save Stock', kind: 'primary', onClick: async () => {
-            const val = Number($('#adjStockInput')?.value || 0);
-            p.stock = val;
-            p.status = val === 0 ? 'out' : val < 10 ? 'low' : 'active';
-            if (supabase) {
-              const { error } = await supabase.from('products').update({ stock: val }).eq('id', p.id);
-              if (error) { toast('อัปเดตสต็อกไม่สำเร็จ: ' + error.message, 'error'); return; }
-            }
-            toast('Stock updated', 'success');
-            renderPage();
-          }}
-        ]
+      openRestockModal(p);
+    });
+  }
+
+  function openRestockModal(prodOrId) {
+    const p = typeof prodOrId === 'object' && prodOrId !== null
+      ? prodOrId
+      : PRODUCTS.find(x => String(x.id) === String(prodOrId));
+
+    if (!p) {
+      toast('ไม่พบข้อมูลสินค้า', 'error');
+      return;
+    }
+
+    const sInfo = getStockStatusInfo(p.stock);
+    const body = el(`
+      <div class="grid" style="gap:14px;">
+        <div style="display:flex; gap:12px; align-items:center; background:var(--primary-50); padding:12px 14px; border-radius:14px; border:1px solid var(--border);">
+          <div style="width:48px; height:48px; border-radius:10px; overflow:hidden; background:var(--card); display:grid; place-items:center; border:1px solid var(--border); flex:none;">
+            <img src="${escapeHTML(p.image || DEFAULT_PRODUCT_IMG)}" alt="${escapeHTML(p.name)}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='${DEFAULT_PRODUCT_IMG}';" />
+          </div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-weight:800; font-size:14px; color:var(--text);">${escapeHTML(p.name)}</div>
+            <div style="font-size:12px; color:var(--muted); margin-top:2px;">
+              หมวดหมู่: <strong>${escapeHTML(p.cat || 'Bakery')}</strong> · คงเหลือปัจจุบัน: <strong style="color:var(--accent-text);">${p.stock}</strong> ชิ้น
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label style="font-weight:700; font-size:12.5px;">จำนวนสต็อกใหม่ที่ต้องการปรับ (New Stock Quantity) *</label>
+          <input type="number" id="adjStockInput" class="input" value="${p.stock}" min="0" style="font-size:16px; font-weight:700; text-align:center; padding:10px;" />
+        </div>
+
+        <div style="display:flex; gap:8px; justify-content:center;">
+          <button type="button" class="btn btn-sm btn-quick-add" data-add="10" style="font-size:11.5px; padding:5px 12px;">+10 ชิ้น</button>
+          <button type="button" class="btn btn-sm btn-quick-add" data-add="50" style="font-size:11.5px; padding:5px 12px;">+50 ชิ้น</button>
+          <button type="button" class="btn btn-sm btn-quick-add" data-add="100" style="font-size:11.5px; padding:5px 12px;">+100 ชิ้น</button>
+        </div>
+      </div>
+    `);
+
+    body.querySelectorAll('.btn-quick-add').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const inp = body.querySelector('#adjStockInput');
+        if (inp) inp.value = Math.max(0, Number(inp.value || 0) + Number(btn.dataset.add));
       });
+    });
+
+    openModal({
+      title: `เติมสต็อกสินค้า (Restock: ${p.name})`,
+      body,
+      actions: [
+        { label: 'Cancel', kind: 'ghost' },
+        { label: 'Save Stock (บันทึกสต็อก)', kind: 'primary', onClick: async () => {
+          const val = Number($('#adjStockInput')?.value || 0);
+          p.stock = val;
+          p.status = val === 0 ? 'out' : val < 10 ? 'low' : 'active';
+          if (supabase) {
+            const { error } = await supabase.from('products').update({ stock: val, status: p.status }).eq('id', p.id);
+            if (error) { toast('อัปเดตสต็อกไม่สำเร็จ: ' + error.message, 'error'); return; }
+          }
+          toast(`อัปเดตสต็อก "${p.name}" เป็น ${val} ชิ้นแล้ว`, 'success');
+          renderPage();
+        }}
+      ]
     });
   }
 
@@ -2917,9 +2966,9 @@
                   <td><span class="${getStockStatusInfo(p.stock).badgeClass}">${p.stock} in stock</span></td>
                   <td><span class="${getStockStatusInfo(p.stock).badgeClass}">${getStockStatusInfo(p.stock).label}</span></td>
                   <td style="text-align:right;">
-                    <div class="flex gap-1" style="justify-content:flex-end;">
-                      <button class="btn btn-sm" data-a="edit-p" data-id="${p.id}">${ICONS.edit} Edit</button>
-                      <button class="btn btn-sm btn-danger" data-a="del-p" data-id="${p.id}">${ICONS.delete}</button>
+                    <div style="display:flex; gap:10px; justify-content:flex-end; align-items:center;">
+                      <button class="btn btn-sm" data-a="edit-p" data-id="${p.id}" style="padding:6px 12px; font-weight:700; background:var(--primary-50); border:1px solid var(--border); color:var(--accent-text);">${ICONS.edit} Edit</button>
+                      <button class="btn btn-sm btn-danger" data-a="del-p" data-id="${p.id}" style="padding:6px 12px;">${ICONS.delete} Delete</button>
                     </div>
                   </td>
                 </tr>
@@ -2977,7 +3026,7 @@
 
     prodTableCard.querySelectorAll('[data-a="edit-p"]').forEach(b => {
       b.addEventListener('click', () => {
-        const prod = PRODUCTS.find(x => x.id === +b.dataset.id);
+        const prod = PRODUCTS.find(x => String(x.id) === String(b.dataset.id));
         if (prod) openAddProductModal(prod);
       });
     });
@@ -3153,15 +3202,27 @@
         </div>
         <div class="table-wrap">
           <table class="data" id="stockTable">
-            <thead><tr><th>Product</th><th>Category</th><th>Stock</th><th>Status</th><th>Action</th></tr></thead>
+            <thead><tr><th>Product</th><th>Category</th><th>Stock</th><th>Status</th><th style="text-align:right;">Action</th></tr></thead>
             <tbody>
               ${PRODUCTS.map(s => `
                 <tr data-pid="${s.id}">
-                  <td><div class="flex items-center gap-2"><span style="font-size:18px">${s.emoji}</span><strong>${escapeHTML(s.name)}</strong></div></td>
-                  <td>${escapeHTML(s.cat || 'General')}</td>
+                  <td>
+                    <div class="flex items-center gap-3">
+                      <div style="width:38px; height:38px; border-radius:8px; overflow:hidden; background:var(--primary-50); border:1px solid var(--border); flex:none;">
+                        <img src="${escapeHTML(s.image || DEFAULT_PRODUCT_IMG)}" alt="${escapeHTML(s.name)}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='${DEFAULT_PRODUCT_IMG}';" />
+                      </div>
+                      <div>
+                        <strong style="font-size:13.5px;">${escapeHTML(s.name)}</strong>
+                        ${s.flavor ? `<div style="font-size:11px; color:var(--muted);">${escapeHTML(s.flavor)}</div>` : ''}
+                      </div>
+                    </div>
+                  </td>
+                  <td><span class="badge">${escapeHTML(s.cat || 'General')}</span></td>
                   <td><strong style="font-size:14px;">${s.stock}</strong></td>
                   <td><span class="${getStockStatusInfo(s.stock).badgeClass}">${getStockStatusInfo(s.stock).label}</span></td>
-                  <td><button class="btn btn-sm btn-restock" data-id="${s.id}" style="font-weight:700; background:var(--primary-50); border:1px solid var(--border); color:var(--accent-text);">Restock</button></td>
+                  <td style="text-align:right;">
+                    <button class="btn btn-sm btn-restock" data-id="${s.id}" style="font-weight:700; background:var(--primary-50); border:1px solid var(--border); color:var(--accent-text); padding:6px 14px;">+ เติมสต็อก</button>
+                  </td>
                 </tr>`).join('')}
             </tbody>
           </table>
@@ -3173,7 +3234,7 @@
     tableCard.querySelectorAll('.btn-restock').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const prod = PRODUCTS.find(x => x.id === +btn.dataset.id);
+        const prod = PRODUCTS.find(x => String(x.id) === String(btn.dataset.id));
         if (prod) openRestockModal(prod);
       });
     });
@@ -5639,49 +5700,65 @@
           return 0;
         });
 
+        const avgRating = REVIEWS.length > 0
+          ? (REVIEWS.reduce((sum, r) => sum + Number(r.rating || 5), 0) / REVIEWS.length).toFixed(1)
+          : '5.0';
+        const orderCount = ORDERS.length;
+        const reviewSub = REVIEWS.length > 0
+          ? `ความประทับใจและรีวิวจากลูกค้าตัวจริง · ${avgRating} / 5.0 (${orderCount} คำสั่งซื้อ)`
+          : `ยังไม่มีรีวิวสำหรับร้านนี้ (${orderCount} คำสั่งซื้อ)`;
+
         let homePinnedCount = 0;
         const reviewsSection = el(`
           <div class="card" style="margin-top:16px;">
             <div class="flex items-center" style="justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
               <div>
                 <div class="card-title">Customer Reviews &amp; Pinned Notes (${REVIEWS.length})</div>
-                <div class="card-sub">ความประทับใจและรีวิวจากลูกค้าตัวจริง · 4.9 / 5.0 (420+ Orders)</div>
+                <div class="card-sub">${escapeHTML(reviewSub)}</div>
               </div>
               <button class="btn btn-primary btn-sm" id="btnHomeWriteReview" style="font-weight:700;">เขียนรีวิวให้ร้านค้า</button>
             </div>
 
-            <div class="reviews-grid">
-              ${sortedHomeReviews.map(r => {
-                const isPinned = !!r.pinned;
-                let stickyClass = '';
-                if (isPinned) {
-                  stickyClass = homePinnedCount % 2 === 0 ? 'pinned-sticky tilt-left' : 'pinned-sticky tilt-right';
-                  homePinnedCount++;
-                }
-                return `
-                  <div class="review-card ${stickyClass}">
-                    ${isPinned ? `
-                      <div class="sticky-pin-badge">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 17v5M5 17h14M7 17l1-9h8l1 9M9 8V3h6v5"/></svg>
-                        <span>Pinned Note</span>
-                      </div>
-                    ` : ''}
-                    <div class="review-head">
-                      <div class="avatar" style="width:38px; height:38px; font-size:13px; font-weight:800; background:var(--card); border:1px solid var(--border);">${escapeHTML(r.avatar || 'AW')}</div>
-                      <div style="flex:1;">
-                        <div class="flex items-center gap-2">
-                          <span class="review-name" style="font-size:13.5px; font-weight:700; color:var(--text);">${escapeHTML(r.name)}</span>
-                          <span class="badge success" style="font-size:10px; padding:1px 6px;">✓ Verified</span>
+            ${sortedHomeReviews.length > 0 ? `
+              <div class="reviews-grid">
+                ${sortedHomeReviews.map(r => {
+                  const isPinned = !!r.pinned;
+                  let stickyClass = '';
+                  if (isPinned) {
+                    stickyClass = homePinnedCount % 2 === 0 ? 'pinned-sticky tilt-left' : 'pinned-sticky tilt-right';
+                    homePinnedCount++;
+                  }
+                  return `
+                    <div class="review-card ${stickyClass}">
+                      ${isPinned ? `
+                        <div class="sticky-pin-badge">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 17v5M5 17h14M7 17l1-9h8l1 9M9 8V3h6v5"/></svg>
+                          <span>Pinned Note</span>
                         </div>
-                        <div class="review-date" style="font-size:11px; color:var(--muted);">${r.date || '2026-08-20'}</div>
+                      ` : ''}
+                      <div class="review-head">
+                        <div class="avatar" style="width:38px; height:38px; font-size:13px; font-weight:800; background:var(--card); border:1px solid var(--border);">${escapeHTML(r.avatar || 'AW')}</div>
+                        <div style="flex:1;">
+                          <div class="flex items-center gap-2">
+                            <span class="review-name" style="font-size:13.5px; font-weight:700; color:var(--text);">${escapeHTML(r.name)}</span>
+                            <span class="badge success" style="font-size:10px; padding:1px 6px;">✓ Verified</span>
+                          </div>
+                          <div class="review-date" style="font-size:11px; color:var(--muted);">${r.date || '2026-08-20'}</div>
+                        </div>
+                        <div class="stars">${renderHearts(r.rating)}</div>
                       </div>
-                      <div class="stars">${renderHearts(r.rating)}</div>
+                      <div class="review-text" style="font-size:13px; line-height:1.5; color:var(--text); margin-top:6px;">${escapeHTML(r.text)}</div>
                     </div>
-                    <div class="review-text" style="font-size:13px; line-height:1.5; color:var(--text); margin-top:6px;">${escapeHTML(r.text)}</div>
-                  </div>
-                `;
-              }).join('')}
-            </div>
+                  `;
+                }).join('')}
+              </div>
+            ` : `
+              <div class="empty" style="padding: 24px; text-align: center; color: var(--muted); background: var(--primary-50); border-radius: 12px; border: 1px dashed var(--border);">
+                <div style="font-size: 28px; margin-bottom: 6px;">💌</div>
+                <div style="font-weight: 700; font-size: 13.5px; color: var(--text);">ยังไม่มีรีวิวในขณะนี้</div>
+                <div style="font-size: 12px; margin-top: 2px;">เมื่อลูกค้าสั่งซื้อสินค้า สามารถเป็นคนแรกที่เขียนรีวิวให้ร้านค้าได้เลย!</div>
+              </div>
+            `}
           </div>
         `);
         view.appendChild(reviewsSection);
