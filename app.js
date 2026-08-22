@@ -413,6 +413,7 @@
       time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
       timestamp: Date.now()
     };
+    state.clearedOrderNotifIds.delete(order.id);
     if (!state.recentOrderNotifs.some(x => x.id === notifItem.id)) {
       state.recentOrderNotifs.unshift(notifItem);
       if (state.recentOrderNotifs.length > 30) state.recentOrderNotifs.pop();
@@ -554,7 +555,7 @@
         notifList.querySelectorAll('.btn-notif-restock').forEach(btn => {
           btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const pid = Number(btn.dataset.id);
+            const pid = btn.dataset.id;
             $('#notifDropdown')?.classList.remove('open');
             openRestockModal(pid);
           });
@@ -563,7 +564,7 @@
         notifList.querySelectorAll('.btn-notif-dismiss').forEach(btn => {
           btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const pid = Number(btn.dataset.id);
+            const pid = btn.dataset.id;
             state.clearedNotifProductIds.add(pid);
             updateStockNotifications();
             toast('ลบการแจ้งเตือนสินค้านี้แล้ว', 'info');
@@ -681,7 +682,7 @@
       const [pRes, cRes, oRes, cuRes, rRes, prRes, stRes, ssRes] = await Promise.all([
         supabase.from('products').select('*').order('id', { ascending: true }),
         supabase.from('categories').select('*').order('sort_order', { ascending: true }),
-        supabase.from('orders').select('*').order('created_at', { ascending: false }),
+        supabase.from('orders').select('*, order_items(*)').order('created_at', { ascending: false }),
         supabase.from('customers').select('*').order('created_at', { ascending: false }),
         supabase.from('reviews').select('*').order('created_at', { ascending: false }),
         supabase.from('promotions').select('*').order('created_at', { ascending: false }),
@@ -750,14 +751,52 @@
       }
 
       if (oRes.data) {
-        ORDERS = oRes.data.map(o => ({
-          id: o.order_number || o.id,
-          customer: o.customer_name || 'Walk-in Customer',
-          date: (o.created_at || '').split('T')[0] || new Date().toISOString().split('T')[0],
-          items: o.items_count || 1,
-          total: Number(o.total || 0),
-          status: o.status || 'waiting'
-        }));
+        ORDERS = oRes.data.map(o => {
+          let itemsList = [];
+          if (Array.isArray(o.order_items) && o.order_items.length > 0) {
+            itemsList = o.order_items.map(it => {
+              const matchedProd = PRODUCTS.find(p => String(p.id) === String(it.product_id) || p.name === it.product_name);
+              return {
+                id: it.product_id || it.id,
+                name: it.product_name || matchedProd?.name || 'Product',
+                price: Number(it.unit_price || matchedProd?.price || 0),
+                qty: Number(it.quantity || 1),
+                subtotal: Number(it.total || 0),
+                image: matchedProd?.image || '',
+                cat: matchedProd?.cat || 'Bakery'
+              };
+            });
+          }
+          let custName = o.customer_name || 'Walk-in Customer';
+          let farmN = '';
+          let farmT = '';
+          let contactInfo = '';
+          let slipUrl = '';
+          if (o.note && o.note.includes('Customer:')) {
+            const parts = o.note.split('|').map(s => s.trim());
+            parts.forEach(p => {
+              if (p.startsWith('Customer:')) custName = p.replace('Customer:', '').trim();
+              if (p.startsWith('Farm:')) farmN = p.replace('Farm:', '').trim();
+              if (p.startsWith('Contact:')) contactInfo = p.replace('Contact:', '').trim();
+              if (p.startsWith('Slip:')) slipUrl = p.replace('Slip:', '').trim();
+            });
+          }
+          return {
+            id: o.order_number || o.id,
+            customer: custName,
+            farm_name: farmN,
+            farm_tag: farmT,
+            contact: contactInfo,
+            date: (o.created_at || '').split('T')[0] || new Date().toISOString().split('T')[0],
+            items: o.items_count || itemsList.length || 1,
+            items_data: itemsList,
+            subtotal: Number(o.subtotal || o.total || 0),
+            discount: Number(o.discount || 0),
+            total: Number(o.total || 0),
+            status: o.status || 'waiting',
+            slip_url: slipUrl || ''
+          };
+        });
         // Not calling persistOrders() — Supabase is the source of truth
       }
 
@@ -1553,6 +1592,12 @@
       });
       nav.appendChild(item);
     });
+
+    // Theme Toggle button: Only show for Admin
+    const themeBtn = document.getElementById('themeToggle');
+    if (themeBtn) {
+      themeBtn.style.display = state.isAdmin ? 'inline-flex' : 'none';
+    }
 
     // Sidebar footer: if Admin, offer Switch to Customer View
     const sidebarFoot = $('#sidebarFoot');
@@ -2394,30 +2439,63 @@
     const grid = el(`<div class="grid detail-grid"></div>`);
     root.appendChild(grid);
 
+    let itemsList = [];
+    if (Array.isArray(o.items_data) && o.items_data.length > 0) {
+      itemsList = o.items_data;
+    } else if (Array.isArray(o.items_list) && o.items_list.length > 0) {
+      itemsList = o.items_list;
+    } else if (typeof o.items_data === 'string') {
+      try { itemsList = JSON.parse(o.items_data); } catch(e) {}
+    }
+
+    if (!itemsList || itemsList.length === 0) {
+      itemsList = PRODUCTS.slice(0, Math.max(1, Number(o.items || 1))).map((p) => ({
+        id: p.id,
+        name: p.name,
+        cat: p.cat || 'Bakery',
+        image: p.image || DEFAULT_PRODUCT_IMG,
+        price: Number(p.price || 0),
+        qty: 1
+      }));
+    }
+
     grid.appendChild(el(`
       <div class="card">
-        <div class="card-title">Items</div>
-        <div class="card-sub">${o.items} items in this order</div>
+        <div class="card-title">Items (${itemsList.length})</div>
+        <div class="card-sub">รายการสินค้าที่ลูกค้าสั่งซื้อในออเดอร์นี้</div>
         <div class="table-wrap">
           <table class="data">
-            <thead><tr><th>Product</th><th>Qty</th><th>Unit</th><th>Subtotal</th></tr></thead>
+            <thead><tr><th>Product</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead>
             <tbody>
-              ${PRODUCTS.slice(0, o.items).map((p, i) => `
+              ${itemsList.map((it) => {
+                const imgUrl = it.image || DEFAULT_PRODUCT_IMG;
+                const unitPrice = Number(it.price || 0);
+                const quantity = Number(it.qty || 1);
+                const itemSub = unitPrice * quantity;
+                return `
                 <tr>
-                  <td><div class="flex items-center gap-3">
-                    <div style="width:36px;height:36px;display:grid;place-items:center;font-size:20px;border-radius:10px;background:var(--primary-50)">${p.emoji}</div>
-                    <div><div style="font-weight:600">${escapeHTML(p.name)}</div><div style="font-size:12px; color:var(--muted)">${p.cat}</div></div>
-                  </div></td>
-                  <td>${i + 1}</td>
-                  <td>${money(p.price)}</td>
-                  <td>${money(p.price * (i + 1))}</td>
-                </tr>`).join('')}
+                  <td>
+                    <div class="flex items-center gap-3">
+                      <div style="width:40px; height:40px; border-radius:10px; overflow:hidden; background:var(--primary-50); border:1px solid var(--border); flex:none;">
+                        <img src="${escapeHTML(imgUrl)}" alt="${escapeHTML(it.name || 'Product')}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='${DEFAULT_PRODUCT_IMG}';" />
+                      </div>
+                      <div>
+                        <div style="font-weight:700; font-size:13.5px; color:var(--text);">${escapeHTML(it.name || 'Product')}</div>
+                        <div style="font-size:11.5px; color:var(--muted);">${escapeHTML(it.cat || 'Bakery')}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td style="font-weight:700; font-size:13.5px;">${quantity}</td>
+                  <td>${money(unitPrice)}</td>
+                  <td style="font-weight:800; color:var(--accent-text);">${money(itemSub)}</td>
+                </tr>`;
+              }).join('')}
             </tbody>
           </table>
         </div>
-        <div class="kv" style="margin-top:8px"><span class="k">Subtotal</span><span class="v">${money(Math.max(0, o.total - 2))}</span></div>
-        <div class="kv"><span class="k">Shipping</span><span class="v">${money(2)}</span></div>
-        <div class="kv"><span class="k">Total</span><span class="v" style="color:var(--accent-text); font-size:16px">${money(o.total)}</span></div>
+        <div class="kv" style="margin-top:12px"><span class="k">ยอดรวมสินค้า (Subtotal)</span><span class="v">${money(o.subtotal !== undefined ? o.subtotal : o.total)}</span></div>
+        ${o.discount > 0 ? `<div class="kv"><span class="k" style="color:var(--accent-text)">ส่วนลดโปรโมชั่น</span><span class="v" style="color:var(--danger)">-${money(o.discount)}</span></div>` : ''}
+        <div class="kv" style="border-top:1px dashed var(--border); padding-top:6px; margin-top:4px;"><span class="k" style="font-weight:800; font-size:15px;">ยอดรวมสุทธิ (Total)</span><span class="v" style="color:var(--accent-text); font-size:16px; font-weight:800;">${money(o.total)}</span></div>
 
         <div style="margin-top:18px">
           <div class="card-title" style="margin-bottom:10px">Progress Timeline</div>
@@ -6352,7 +6430,23 @@
           const farmName = $('#coFarmName')?.value.trim() || '';
           const farmTag = $('#coFarmTag')?.value.trim() || '';
           const contact = $('#coContact')?.value.trim() || '';
-          const newOrderNumber = 'HP-' + Math.floor(1000 + Math.random()*9000);
+          const newOrderNumber = 'HP-' + Date.now().toString().slice(-6) + '-' + Math.floor(100 + Math.random()*900);
+
+          const selectedItemsList = Object.entries(state.selected).map(([pid, q]) => {
+            const p = PRODUCTS.find(x => String(x.id) === String(pid));
+            return {
+              id: pid,
+              name: p ? p.name : 'Product',
+              price: Number(p ? p.price : 0),
+              qty: Number(q),
+              subtotal: Number((p ? p.price : 0) * Number(q)),
+              image: p ? (p.image || '') : '',
+              cat: p ? (p.cat || 'Bakery') : 'Bakery'
+            };
+          });
+
+          const totalItemsCount = selectedItemsList.reduce((sum, it) => sum + it.qty, 0);
+
           const newOrder = {
             id: newOrderNumber,
             customer: name,
@@ -6360,12 +6454,13 @@
             farm_tag: farmTag,
             contact: contact,
             date: new Date().toISOString().split('T')[0],
-            items: Object.keys(state.selected).length || 3,
+            items: totalItemsCount || 1,
+            items_data: selectedItemsList,
             subtotal: subtotal,
             discount: discount,
             promo_code: state.appliedPromo ? state.appliedPromo.code : '',
             delivery: 0,
-            total: total || 35.30,
+            total: total || subtotal,
             status: 'waiting',
             slip_url: uploadedSlipData || ''
           };
@@ -6389,6 +6484,7 @@
           // 2. Persist to Supabase Database table 'orders' & 'order_items'
           if (supabase) {
             try {
+              const noteMeta = `Customer: ${name} | Farm: ${farmName} | Tag: ${farmTag} | Contact: ${contact} | Promo: ${state.appliedPromo?.code || '-'}`;
               const { data: insertedOrder, error: ordErr } = await supabase.from('orders').insert({
                 store_id: '00000000-0000-0000-0000-000000000001',
                 order_number: newOrderNumber,
@@ -6399,21 +6495,19 @@
                 total: Number(total || 0),
                 status: 'waiting',
                 payment_method: 'qr',
-                note: `Customer: ${name} | Farm: ${farmName} (${farmTag}) | Contact: ${contact} | Promo: ${state.appliedPromo?.code || '-'}`
+                items_count: totalItemsCount,
+                note: noteMeta
               }).select().single();
 
               if (!ordErr && insertedOrder) {
-                const itemRows = Object.entries(state.selected).map(([id, q]) => {
-                  const p = PRODUCTS.find(x => String(x.id) === String(id));
-                  return {
-                    order_id: insertedOrder.id,
-                    product_id: p && !String(p.id).startsWith('prod_') ? p.id : null,
-                    product_name: p ? p.name : 'Item',
-                    quantity: Number(q),
-                    unit_price: Number(p ? p.price : 0),
-                    total: Number((p ? p.price : 0) * Number(q))
-                  };
-                });
+                const itemRows = selectedItemsList.map(it => ({
+                  order_id: insertedOrder.id,
+                  product_id: (it.id && !String(it.id).startsWith('prod_') && it.id.length === 36) ? it.id : null,
+                  product_name: it.name,
+                  quantity: Number(it.qty),
+                  unit_price: Number(it.price),
+                  total: Number(it.subtotal)
+                }));
                 if (itemRows.length > 0) {
                   await supabase.from('order_items').insert(itemRows);
                 }
@@ -6885,9 +6979,10 @@
       if (state.store) localStorage.setItem('haypos_store_settings', JSON.stringify(state.store));
     } catch (e) {}
 
-    // 5. Update topbar themeToggle button icon & tooltip immediately
+    // 5. Update topbar themeToggle button icon & tooltip immediately (Only visible for Admin)
     const themeBtn = document.getElementById('themeToggle');
     if (themeBtn) {
+      themeBtn.style.display = state.isAdmin ? 'inline-flex' : 'none';
       themeBtn.innerHTML = state.theme === 'dark'
         ? `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`
         : `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>`;
