@@ -866,6 +866,39 @@
             renderPage();
           }
         })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, (payload) => {
+          console.log('Realtime categories change:', payload);
+          if (payload.eventType === 'INSERT') {
+            const c = payload.new;
+            if (!CATEGORIES.find(x => x.name.toLowerCase() === c.name.toLowerCase())) {
+              CATEGORIES.push({ name: c.name, count: 0, emoji: c.emoji || '🧁' });
+              renderPage();
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const c = payload.new;
+            const idx = CATEGORIES.findIndex(x => (payload.old?.name && x.name === payload.old.name) || x.name === c.name);
+            if (idx !== -1) {
+              CATEGORIES[idx] = { ...CATEGORIES[idx], name: c.name, emoji: c.emoji || CATEGORIES[idx].emoji };
+              renderPage();
+            }
+          } else if (payload.eventType === 'DELETE') {
+            if (payload.old?.name) {
+              CATEGORIES = CATEGORIES.filter(x => x.name !== payload.old.name);
+              renderPage();
+            }
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'store_settings' }, (payload) => {
+          console.log('Realtime store_settings change:', payload);
+          if (payload.new) {
+            const ss = payload.new;
+            if (ss.qr_image_url !== undefined) state.store.qr_image_url = ss.qr_image_url;
+            if (ss.bank_name) state.store.bank_name = ss.bank_name;
+            if (ss.bank_account) state.store.bank_account = ss.bank_account;
+            if (ss.account_holder) state.store.account_holder = ss.account_holder;
+            renderPage();
+          }
+        })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'promotions' }, (payload) => {
           if (payload.eventType === 'INSERT') {
             const pr = payload.new;
@@ -878,7 +911,6 @@
                 end: pr.end_date || '2026-12-31',
                 status: pr.status || 'active'
               });
-              persistPromotions();
               renderPage();
             }
           }
