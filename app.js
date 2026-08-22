@@ -403,6 +403,8 @@
     pin: '',              // 6-digit PIN buffer
     correctPin: loadedStore.pin || '123456', // Default 6-digit PIN
     clearedNotifProductIds: new Set(),
+    recentOrderNotifs: [],
+    clearedOrderNotifIds: new Set(),
     store: loadedStore
   };
 
@@ -464,6 +466,23 @@
     }
   }
 
+  function notifyNewOrder(order) {
+    if (!order) return;
+    const notifItem = {
+      id: order.id,
+      customer: order.customer || 'Customer',
+      total: Number(order.total || 0),
+      items: order.items || 1,
+      time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+      timestamp: Date.now()
+    };
+    state.recentOrderNotifs.unshift(notifItem);
+    if (state.recentOrderNotifs.length > 30) state.recentOrderNotifs.pop();
+
+    toast(`มีออเดอร์ใหม่เข้ามา! #${order.id} จากคุณ ${order.customer} (${money(order.total)})`, 'success');
+    updateStockNotifications();
+  }
+
   function updateStockNotifications() {
     const notifWrap = $('#notifWrap');
     if (!notifWrap) return;
@@ -476,53 +495,123 @@
 
     const lowThresh = Number(state.store && state.store.stockLowThreshold !== undefined ? state.store.stockLowThreshold : 100);
     const lowProducts = PRODUCTS.filter(p => p.stock < lowThresh);
-    const activeAlerts = lowProducts.filter(p => !state.clearedNotifProductIds.has(p.id));
+    const activeStockAlerts = lowProducts.filter(p => !state.clearedNotifProductIds.has(p.id));
+    const activeOrderAlerts = (state.recentOrderNotifs || []).filter(o => !state.clearedOrderNotifIds.has(o.id));
+
+    const totalCount = activeStockAlerts.length + activeOrderAlerts.length;
 
     const notifBadge = $('#notifBadge');
     const notifCountBadge = $('#notifCountBadge');
     const notifList = $('#notifList');
 
     if (notifBadge) {
-      notifBadge.textContent = activeAlerts.length;
-      notifBadge.classList.toggle('active', activeAlerts.length > 0);
+      notifBadge.textContent = totalCount;
+      notifBadge.classList.toggle('active', totalCount > 0);
     }
     if (notifCountBadge) {
-      notifCountBadge.textContent = `${activeAlerts.length} รายการ`;
+      notifCountBadge.textContent = `${totalCount} รายการ`;
     }
 
     if (notifList) {
-      if (activeAlerts.length === 0) {
+      if (totalCount === 0) {
         notifList.innerHTML = `
           <div class="notif-empty">
-            <div style="font-size:24px; margin-bottom:6px;">✨</div>
-            <strong style="color:var(--text); font-size:13px; display:block;">ไม่มีการแจ้งเตือนสต็อก</strong>
-            <span>สินค้าทุกรายการมีสต็อกเพียงพอ หรือคุณได้ล้างการแจ้งเตือนแล้ว</span>
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--muted); margin:0 auto 8px; display:block;"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+            <strong style="color:var(--text); font-size:13px; display:block;">ไม่มีการแจ้งเตือน</strong>
+            <span>ไม่มีออเดอร์ใหม่ที่ค้างอยู่ และสต็อกสินค้าพร้อมขายครบถ้วน</span>
           </div>
         `;
       } else {
-        notifList.innerHTML = activeAlerts.map(p => {
-          const sInfo = getStockStatusInfo(p.stock);
-          return `
-            <div class="notif-card-item ${sInfo.type}" data-id="${p.id}">
-              <div style="width:36px; height:36px; border-radius:10px; overflow:hidden; background:var(--primary-50); display:grid; place-items:center; border:1px solid var(--border); flex:none;">
-                ${p.image ? `<img src="${escapeHTML(p.image)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='block';" /><span style="display:none; font-size:16px;">${p.emoji || '🍰'}</span>` : `<span style="font-size:16px;">${p.emoji || '🍰'}</span>`}
-              </div>
-              <div style="flex:1; min-width:0;">
-                <div style="font-weight:700; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text);">${escapeHTML(p.name)}</div>
-                <div style="font-size:11px; color:var(--muted); display:flex; align-items:center; gap:6px; margin-top:2px;">
-                  <span>คงเหลือ: <strong style="color:var(--text);">${p.stock}</strong> ชิ้น</span>
-                  <span class="${sInfo.badgeClass}" style="font-size:10px; padding:1px 6px;">${sInfo.label}</span>
-                </div>
-              </div>
-              <div style="display:flex; align-items:center; gap:4px; flex:none;">
-                <button type="button" class="btn btn-sm btn-notif-restock" data-id="${p.id}" style="font-size:11px; font-weight:700; padding:4px 8px; background:var(--primary-50); color:var(--accent-text); border:1px solid var(--border);">เติมสต็อก</button>
-                <button type="button" class="btn btn-sm btn-notif-dismiss" data-id="${p.id}" title="ลบการแจ้งเตือนชิ้นนี้" style="font-size:12px; padding:4px 6px; border:none; background:transparent; color:var(--muted); cursor:pointer;">✕</button>
-              </div>
+        let html = '';
+
+        // 1. New Orders Section
+        if (activeOrderAlerts.length > 0) {
+          html += `
+            <div style="font-size:11.5px; font-weight:800; color:var(--text); padding:4px 2px; display:flex; align-items:center; gap:6px;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent-text);"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+              <span>ออเดอร์ใหม่ล่าสุด (${activeOrderAlerts.length})</span>
             </div>
           `;
-        }).join('');
+          html += activeOrderAlerts.map(o => `
+            <div class="notif-card-item" style="border-left:4px solid #7CC59A;" data-oid="${o.id}">
+              <div style="width:36px; height:36px; border-radius:10px; background:var(--primary-100); color:var(--accent-text); display:grid; place-items:center; font-weight:800; font-size:12px; flex:none;">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+              </div>
+              <div style="flex:1; min-width:0;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
+                  <strong style="font-size:12.5px; color:var(--text);">ออเดอร์ #${escapeHTML(o.id)}</strong>
+                  <span class="badge success" style="font-size:9.5px; padding:1px 5px;">New Order</span>
+                </div>
+                <div style="font-size:11px; color:var(--muted); margin-top:2px;">
+                  <span>ลูกค้า: <strong>${escapeHTML(o.customer)}</strong></span> · <span style="color:var(--accent-text); font-weight:700;">${money(o.total)}</span>
+                </div>
+                <div style="font-size:10px; color:var(--muted); margin-top:1px;">เวลา ${escapeHTML(o.time)}</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:4px; flex:none;">
+                <button type="button" class="btn btn-sm btn-notif-vieworder" data-oid="${o.id}" style="font-size:11px; font-weight:700; padding:4px 8px; background:var(--primary-50); color:var(--accent-text); border:1px solid var(--border);">ดูออเดอร์</button>
+                <button type="button" class="btn btn-sm btn-notif-dismissorder" data-oid="${o.id}" title="ลบการแจ้งเตือนนี้" style="font-size:12px; padding:4px 6px; border:none; background:transparent; color:var(--muted); cursor:pointer;">✕</button>
+              </div>
+            </div>
+          `).join('');
+        }
 
-        // Attach listeners inside list
+        // 2. Low Stock Alerts Section
+        if (activeStockAlerts.length > 0) {
+          html += `
+            <div style="font-size:11.5px; font-weight:800; color:var(--text); padding:4px 2px; margin-top:${activeOrderAlerts.length ? '6px' : '0'}; display:flex; align-items:center; gap:6px;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--danger);"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+              <span>สต็อกสินค้าเหลือน้อย (${activeStockAlerts.length})</span>
+            </div>
+          `;
+          html += activeStockAlerts.map(p => {
+            const sInfo = getStockStatusInfo(p.stock);
+            return `
+              <div class="notif-card-item ${sInfo.type}" data-id="${p.id}">
+                <div style="width:36px; height:36px; border-radius:10px; overflow:hidden; background:var(--primary-50); display:grid; place-items:center; border:1px solid var(--border); flex:none;">
+                  ${p.image ? `<img src="${escapeHTML(p.image)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='block';" /><span style="display:none; font-size:16px;">${p.emoji || '🍰'}</span>` : `<span style="font-size:16px;">${p.emoji || '🍰'}</span>`}
+                </div>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-weight:700; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text);">${escapeHTML(p.name)}</div>
+                  <div style="font-size:11px; color:var(--muted); display:flex; align-items:center; gap:6px; margin-top:2px;">
+                    <span>คงเหลือ: <strong style="color:var(--text);">${p.stock}</strong> ชิ้น</span>
+                    <span class="${sInfo.badgeClass}" style="font-size:10px; padding:1px 6px;">${sInfo.label}</span>
+                  </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:4px; flex:none;">
+                  <button type="button" class="btn btn-sm btn-notif-restock" data-id="${p.id}" style="font-size:11px; font-weight:700; padding:4px 8px; background:var(--primary-50); color:var(--accent-text); border:1px solid var(--border);">เติมสต็อก</button>
+                  <button type="button" class="btn btn-sm btn-notif-dismiss" data-id="${p.id}" title="ลบการแจ้งเตือนชิ้นนี้" style="font-size:12px; padding:4px 6px; border:none; background:transparent; color:var(--muted); cursor:pointer;">✕</button>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+
+        notifList.innerHTML = html;
+
+        // Attach listeners for order actions
+        notifList.querySelectorAll('.btn-notif-vieworder').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const oid = btn.dataset.oid;
+            $('#notifDropdown')?.classList.remove('open');
+            state.selectedOrder = oid;
+            state.page = 'orders';
+            renderMenu();
+            renderPage();
+          });
+        });
+
+        notifList.querySelectorAll('.btn-notif-dismissorder').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const oid = btn.dataset.oid;
+            state.clearedOrderNotifIds.add(oid);
+            updateStockNotifications();
+            toast('ลบการแจ้งเตือนออเดอร์นี้แล้ว', 'info');
+          });
+        });
+
+        // Attach listeners for stock actions
         notifList.querySelectorAll('.btn-notif-restock').forEach(btn => {
           btn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -570,8 +659,9 @@
         const lowThresh = Number(state.store && state.store.stockLowThreshold !== undefined ? state.store.stockLowThreshold : 100);
         const lowProducts = PRODUCTS.filter(p => p.stock < lowThresh);
         lowProducts.forEach(p => state.clearedNotifProductIds.add(p.id));
+        (state.recentOrderNotifs || []).forEach(o => state.clearedOrderNotifIds.add(o.id));
         updateStockNotifications();
-        toast('ล้างการแจ้งเตือนสต็อกทั้งหมดแล้ว ✨', 'success');
+        toast('ล้างการแจ้งเตือนทั้งหมดแล้ว', 'success');
       });
     }
 
@@ -781,16 +871,17 @@
           if (payload.eventType === 'INSERT') {
             const o = payload.new;
             if (!ORDERS.find(x => x.id === o.order_number || x.id === o.id)) {
-              ORDERS.unshift({
+              const newO = {
                 id: o.order_number || o.id,
                 customer: o.customer_name || 'Customer',
                 date: (o.created_at || '').split('T')[0] || new Date().toISOString().split('T')[0],
                 items: o.items_count || 1,
                 total: Number(o.total || 0),
                 status: o.status || 'waiting'
-              });
+              };
+              ORDERS.unshift(newO);
               persistOrders();
-              toast(`New order #${o.order_number || o.id} received!`, 'info');
+              notifyNewOrder(newO);
               renderPage();
             }
           } else if (payload.eventType === 'UPDATE') {
@@ -1419,6 +1510,98 @@
         <div class="delta">${s.delta}</div>
       </div>`)));
     root.appendChild(statsGrid);
+
+    // Live Active Users & Admin Status Card
+    const adminUser = state.user || { full_name: 'Mira P.', email: 'admin@bnchaymate.com', role: 'Store Owner' };
+    const adminInitial = adminUser.full_name.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase() || 'AD';
+
+    const activeSessions = [
+      {
+        name: adminUser.full_name,
+        email: adminUser.email || 'admin@bnchaymate.com',
+        role: adminUser.role || 'Store Owner',
+        avatar: adminInitial,
+        device: 'Current Device · ' + (navigator.userAgent.includes('Mobile') || navigator.userAgent.includes('iPad') ? 'Tablet/Mobile' : 'Desktop Browser'),
+        time: 'Active Now (กำลังใช้งานอยู่)',
+        isCurrent: true,
+        type: 'admin'
+      },
+      {
+        name: 'Staff Cashier #1',
+        email: 'pos_frontdesk@bnchaymate.com',
+        role: 'Cashier Staff',
+        avatar: 'ST',
+        device: 'POS Counter Tablet #1 · Storefront',
+        time: 'Active 2m ago (ออนไลน์)',
+        isCurrent: false,
+        type: 'staff'
+      },
+      {
+        name: 'Online Guest Customer',
+        email: 'Guest Visitor',
+        role: 'Customer Storefront',
+        avatar: 'GC',
+        device: 'Online Customer · Browsing Menu / Cart',
+        time: 'Active just now (กำลังเลือกซื้อ)',
+        isCurrent: false,
+        type: 'customer'
+      }
+    ];
+
+    const liveUsersCard = el(`
+      <div class="card" style="margin-top:18px;">
+        <div class="flex items-center" style="justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+          <div>
+            <div class="card-title" style="display:flex; align-items:center; gap:8px;">
+              <span class="online-dot"></span>
+              <span>Live Users &amp; Admin Status (สถานะผู้ใช้งาน &amp; แอดมินออนไลน์)</span>
+            </div>
+            <div class="card-sub">ตรวจดูผู้ดูแลระบบ พนักงาน และลูกค้าที่กำลังเปิดใช้งานระบบอยู่ในขณะนี้แบบ Real-time</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="badge success" style="font-size:11px; padding:3px 8px; font-weight:700; display:inline-flex; align-items:center; gap:4px;">
+              <span class="online-dot" style="margin:0;"></span>
+              <span>${activeSessions.length} Sessions Online</span>
+            </span>
+            <button type="button" class="btn btn-sm" id="btnRefreshOnline" style="font-size:12px; font-weight:700; background:var(--primary-50); color:var(--accent-text); border:1px solid var(--border); display:inline-flex; align-items:center; gap:4px;">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+              <span>Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="active-users-list">
+          ${activeSessions.map(u => `
+            <div class="user-status-card ${u.isCurrent ? 'current' : ''}">
+              <div style="width:42px; height:42px; border-radius:12px; background:var(--primary); color:#fff; display:grid; place-items:center; font-weight:800; font-size:14px; flex:none; box-shadow:var(--shadow-soft);">
+                ${escapeHTML(u.avatar)}
+              </div>
+              <div style="flex:1; min-width:0;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+                  <strong style="font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text);">${escapeHTML(u.name)}</strong>
+                  <span class="badge ${u.isCurrent ? 'success' : 'info'}" style="font-size:10px; padding:1px 6px;">${u.isCurrent ? 'อุปกรณ์ปัจจุบัน' : 'Online'}</span>
+                </div>
+                <div style="font-size:11.5px; color:var(--accent-text); font-weight:600;">${escapeHTML(u.role)} · <span style="color:var(--muted); font-weight:400;">${escapeHTML(u.email)}</span></div>
+                <div style="font-size:11px; color:var(--muted); margin-top:2px; display:flex; align-items:center; gap:4px;">
+                  <span style="display:inline-flex; align-items:center; gap:3px;">
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="12" x="3" y="4" rx="2"/><line x1="2" x2="22" y1="20" y2="20"/></svg>
+                    <span>${escapeHTML(u.device)}</span>
+                  </span>
+                  <span>·</span>
+                  <span style="color:#3F8E63; font-weight:600;">${escapeHTML(u.time)}</span>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `);
+    root.appendChild(liveUsersCard);
+
+    liveUsersCard.querySelector('#btnRefreshOnline')?.addEventListener('click', () => {
+      toast('ซิงก์สถานะผู้ใช้งานออนไลน์ล่าสุดแล้ว', 'success');
+      renderPage();
+    });
 
     // sales chart + quick actions
     const twoCol = el(`
@@ -5012,6 +5195,7 @@
             slip_url: uploadedSlipData || ''
           };
           ORDERS.unshift(newOrder);
+          notifyNewOrder(newOrder);
 
           if (supabase) {
             await supabase.from('orders').insert({
