@@ -516,12 +516,12 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
   font-size: 26px;
   cursor: pointer;
   user-select: none;
-  overflow: hidden;
+  overflow: visible;
   box-sizing: border-box;
   transition: transform .15s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease;
 }
 .product-tile img{
-  width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;
+  width: 100%; height: 100%; object-fit: cover; border-radius: 10px; display: block;
 }
 .product-tile:hover{
   background: var(--primary-50);
@@ -535,19 +535,25 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
 }
 .product-tile.out{opacity:.4}
 .product-tile .qty-badge{
-  position:absolute; top:4px; right:4px;
+  position:absolute; top:-7px; right:-7px;
   width:22px; height:22px;
   border-radius: 50%;
   background: var(--primary-600);
-  color:#fff;
+  color:#ffffff;
   font-size:11px; font-weight:800;
   display:none; align-items:center; justify-content:center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.32);
   border: 2px solid #ffffff;
   z-index: 10;
   pointer-events: none;
+  transform: scale(1);
+  animation: badgePop .18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .product-tile.selected .qty-badge{display:flex}
+@keyframes badgePop {
+  0% { transform: scale(0.3); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
 .product-tile .stock-dot{
   position:absolute; bottom:4px; right:4px;
   width:6px; height:6px; border-radius:50%;
@@ -557,33 +563,45 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
 .product-tile.low .stock-dot{background: var(--warning)}
 .product-tile.out .stock-dot{background: var(--danger)}
 
-/* Floating Cart Button */
+/* Floating Cart Button (Compact Pill Style) */
 .floating-cart-btn {
   position: fixed;
   bottom: 24px;
   right: 24px;
   background: var(--primary-600);
   color: #ffffff;
-  border: 2.5px solid #ffffff;
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.28), var(--shadow);
-  padding: 12px 22px;
-  border-radius: 50px;
-  font-size: 14px;
+  border: 2px solid #ffffff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25), var(--shadow-soft);
+  padding: 8px 16px;
+  border-radius: 30px;
+  font-size: 13px;
   font-weight: 800;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   cursor: pointer;
   z-index: 95;
-  transition: all .2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  animation: floatPopIn .25s ease;
+  transition: transform .18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow .18s ease;
+  animation: floatPopIn .22s ease;
 }
 .floating-cart-btn:hover {
-  transform: translateY(-3px) scale(1.03);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  transform: translateY(-2px) scale(1.04);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+}
+.floating-cart-btn:active {
+  transform: scale(0.96);
+}
+.float-cart-count {
+  background: #ffffff;
+  color: var(--primary-600);
+  border-radius: 12px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 800;
+  margin-left: 2px;
 }
 @keyframes floatPopIn {
-  from { opacity: 0; transform: translateY(20px) scale(0.9); }
+  from { opacity: 0; transform: translateY(16px) scale(0.9); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 

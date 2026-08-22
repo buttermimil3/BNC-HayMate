@@ -23,23 +23,75 @@
   }
 
   // ============================================================
-  // Supabase Storage: Upload product / QR image, return URL
+  // Supabase Storage & Optimized Image Upload Helper
   // ============================================================
-  async function uploadProductImage(file) {
-    const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
-    if (file.size > MAX_SIZE) throw new Error('รูปภาพต้องมีขนาดไม่เกิน 5 MB');
-    if (!file.type.startsWith('image/')) throw new Error('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
+  const DEFAULT_PRODUCT_IMG = 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=500&auto=format&fit=crop&q=80';
 
-    // 1. Try uploading directly to Supabase Storage
-    if (supabase) {
+  async function uploadProductImage(file) {
+    if (!file || !file.type || !file.type.startsWith('image/')) {
+      throw new Error('กรุณาเลือกไฟล์รูปภาพ (JPG, PNG, WebP)');
+    }
+
+    // 1. Client-side Image Compression (Resize to max 900px, 85% quality JPEG)
+    // Ensures lightning-fast uploads and prevents payload limits on iPad/iPhone/PC
+    const compressImage = (imageFile) => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              const MAX_DIM = 900;
+              let w = img.width;
+              let h = img.height;
+              if (w > MAX_DIM || h > MAX_DIM) {
+                if (w > h) {
+                  h = Math.round((h * MAX_DIM) / w);
+                  w = MAX_DIM;
+                } else {
+                  w = Math.round((w * MAX_DIM) / h);
+                  h = MAX_DIM;
+                }
+              }
+              canvas.width = w;
+              canvas.height = h;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, w, h);
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+              resolve(dataUrl);
+            } catch (err) {
+              resolve(e.target.result);
+            }
+          };
+          img.onerror = () => resolve(e.target.result);
+          img.src = e.target.result;
+        };
+        reader.onerror = (err) => reject(err);
+        reader.readAsDataURL(imageFile);
+      });
+    };
+
+    const compressedDataUrl = await compressImage(file);
+
+    // 2. Try uploading directly to Supabase Storage
+    if (supabase && compressedDataUrl.startsWith('data:image')) {
       try {
-        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const ext = 'jpg';
         const storeId = '00000000-0000-0000-0000-000000000001';
-        const filePath = `${storeId}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
+        const filePath = `${storeId}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+
+        const byteString = atob(compressedDataUrl.split(',')[1]);
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+          ia[i] = byteString.charCodeAt(i);
+        }
+        const blob = new Blob([ab], { type: 'image/jpeg' });
 
         const { error: uploadError } = await supabase.storage
           .from('product-images')
-          .upload(filePath, file, { upsert: true, contentType: file.type });
+          .upload(filePath, blob, { upsert: true, contentType: 'image/jpeg' });
 
         if (!uploadError) {
           const { data: urlData } = supabase.storage
@@ -49,21 +101,14 @@
           if (urlData && urlData.publicUrl) {
             return urlData.publicUrl;
           }
-        } else {
-          console.warn('Supabase storage upload notice, falling back to data URL:', uploadError.message);
         }
       } catch (err) {
-        console.warn('Supabase storage exception, falling back to data URL:', err);
+        console.warn('Supabase storage notice, using compressed data URL:', err);
       }
     }
 
-    // 2. Seamless fallback: convert to Data URL so it is always persisted and synced across devices
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target.result);
-      reader.onerror = (err) => reject(err);
-      reader.readAsDataURL(file);
-    });
+    // 3. Fallback: compressed Data URL (always persisted in products.image_url)
+    return compressedDataUrl;
   }
 
   
@@ -368,10 +413,12 @@
       time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
       timestamp: Date.now()
     };
-    state.recentOrderNotifs.unshift(notifItem);
-    if (state.recentOrderNotifs.length > 30) state.recentOrderNotifs.pop();
+    if (!state.recentOrderNotifs.some(x => x.id === notifItem.id)) {
+      state.recentOrderNotifs.unshift(notifItem);
+      if (state.recentOrderNotifs.length > 30) state.recentOrderNotifs.pop();
+    }
 
-    toast(`มีออเดอร์ใหม่เข้ามา! #${order.id} จากคุณ ${order.customer} (${money(order.total)})`, 'success');
+    toast(`🔔 ออเดอร์ใหม่เข้ามา! #${order.id} จากคุณ ${order.customer} (${money(order.total)})`, 'success');
     updateStockNotifications();
   }
 
@@ -750,7 +797,11 @@
         syncChannel = null;
       }
 
-      syncChannel = supabase.channel('haypos-multi-device-sync')
+      syncChannel = supabase.channel('haypos-multi-device-sync', {
+        config: {
+          broadcast: { ack: true, self: false }
+        }
+      })
         .on('broadcast', { event: 'new_order' }, ({ payload }) => {
           console.log('Realtime broadcast new_order received:', payload);
           if (payload && payload.id) {
@@ -2392,10 +2443,8 @@
 
       pageItems.forEach(p => {
         const stockCls = p.stock === 0 ? 'out' : p.stock < 10 ? 'low' : '';
-        const qty = state.selected[p.id] || 0;
-        const mediaHtml = p.image
-          ? `<img src="${escapeHTML(p.image)}" alt="${escapeHTML(p.name)}" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='grid';" /><span style="display:none;">${p.emoji || '🍰'}</span>`
-          : `<span>${p.emoji || '🍰'}</span>`;
+        const imgUrl = p.image || DEFAULT_PRODUCT_IMG;
+        const mediaHtml = `<img src="${escapeHTML(imgUrl)}" alt="${escapeHTML(p.name)}" onerror="this.src='${DEFAULT_PRODUCT_IMG}';" />`;
         const tile = el(`
           <div class="product-tile ${stockCls} ${qty ? 'selected' : ''}" data-id="${p.id}" title="${escapeHTML(p.name)} · ${money(p.price)}">
             ${mediaHtml}
@@ -2520,73 +2569,66 @@
 
   function openAddProductModal(existing, prefillCat) {
     let currentImage = existing?.image || '';
-    let currentEmoji = existing?.emoji || '🍰';
 
     const body = el(`
       <div class="grid" style="gap:14px">
-        <!-- Photo & Emoji Header Preview -->
-        <div style="display:flex; gap:14px; align-items:center; background:var(--primary-50); padding:12px; border-radius:14px; border:1px solid var(--border);">
-          <div style="position:relative; width:80px; height:80px; border-radius:14px; border:1.5px dashed var(--border); background:var(--card); display:grid; place-items:center; overflow:hidden; flex:none;">
-            <img id="prodImgPreview" src="${currentImage}" style="width:100%; height:100%; object-fit:cover; display:${currentImage ? 'block' : 'none'};" onerror="this.style.display='none'; document.getElementById('prodEmojiPreview').style.display='grid';" />
-            <div id="prodEmojiPreview" style="font-size:36px; display:${currentImage ? 'none' : 'grid'}; place-items:center;">${currentEmoji}</div>
-            <label for="prodPhotoUpload" style="position:absolute; inset:0; background:rgba(0,0,0,0.45); color:#fff; font-size:10.5px; font-weight:700; display:flex; align-items:center; justify-content:center; opacity:0; cursor:pointer; transition:opacity .18s ease;" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0">
-              เปลี่ยนรูป
-            </label>
+        <!-- Photo Upload Box (Mandatory Photo, No Emojis) -->
+        <div style="background:var(--primary-50); padding:16px; border-radius:16px; border:1.5px solid var(--border); text-align:center;">
+          <div style="position:relative; width:130px; height:130px; border-radius:16px; border:2px dashed var(--border); background:var(--card); display:grid; place-items:center; overflow:hidden; margin:0 auto 10px; box-shadow:var(--shadow-soft);">
+            <img id="prodImgPreview" src="${currentImage || DEFAULT_PRODUCT_IMG}" style="width:100%; height:100%; object-fit:cover; display:${currentImage ? 'block' : 'none'};" onerror="this.style.display='none'; document.getElementById('prodNoPhotoPrompt').style.display='flex';" />
+            <div id="prodNoPhotoPrompt" style="display:${currentImage ? 'none' : 'flex'}; flex-direction:column; align-items:center; justify-content:center; padding:10px; color:var(--muted); font-size:12px; font-weight:700;">
+              <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--accent-text); margin-bottom:4px;"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+              <span>ยังไม่มีรูปภาพ</span>
+            </div>
             <input type="file" id="prodPhotoUpload" accept="image/*" style="display:none;" />
           </div>
 
-          <div style="flex:1;">
-            <div style="font-weight:700; font-size:13.5px; margin-bottom:2px; color:var(--text);">รูปภาพสินค้า (Product Photo)</div>
-            <div style="font-size:11.5px; color:var(--muted); margin-bottom:8px;">อัปโหลดรูปภาพสินค้าจากเครื่อง หรือใส่ลิงก์รูปภาพ</div>
-            <div style="display:flex; gap:8px;">
-              <button class="btn btn-sm" type="button" id="btnUploadPhotoTrigger" style="font-size:11.5px; padding:5px 12px; font-weight:700;">อัปโหลดรูปภาพ</button>
-              <button class="btn btn-sm btn-ghost" type="button" id="btnClearPhoto" style="font-size:11.5px; padding:5px 10px; color:var(--danger);">ลบรูป/ใช้อิโมจิ</button>
-            </div>
+          <div style="font-weight:800; font-size:13.5px; color:var(--text); margin-bottom:2px;">รูปภาพสินค้า (Product Image) *</div>
+          <div style="font-size:11.5px; color:var(--muted); margin-bottom:10px;">กรุณาเลือกไฟล์รูปภาพจากเครื่อง หรือใส่ URL รูปภาพ</div>
+          
+          <div style="display:flex; justify-content:center; gap:8px;">
+            <button class="btn btn-primary btn-sm" type="button" id="btnUploadPhotoTrigger" style="font-size:12px; padding:7px 18px; font-weight:700;">
+              📷 เลือกรูปภาพจากเครื่อง
+            </button>
           </div>
         </div>
 
         <div class="field">
-          <label>ลิงก์รูปภาพ (Image URL - หรืออัปโหลดจากปุ่มด้านบน)</label>
-          <input class="input" id="pImageUrl" placeholder="https://images.unsplash.com/... หรือ อัปโหลดจากเครื่อง" value="${escapeHTML(currentImage)}" />
+          <label style="font-weight:700; font-size:12.5px;">หรือระบุลิงก์รูปภาพ (Image URL)</label>
+          <input class="input" id="pImageUrl" placeholder="https://... หรืออัปโหลดจากปุ่มด้านบน" value="${escapeHTML(currentImage)}" />
         </div>
 
-        <div class="grid" style="grid-template-columns: 1fr 90px; gap:12px">
-          <div class="field">
-            <label>ชื่อสินค้า (Product Name) *</label>
-            <input class="input" id="pName" placeholder="เช่น Strawberry Cheesecake" value="${existing ? escapeHTML(existing.name) : ''}"/>
-          </div>
-          <div class="field">
-            <label>อิโมจิสำรอง</label>
-            <input class="input" id="pEmoji" value="${escapeHTML(currentEmoji)}" style="text-align:center; font-size:18px;"/>
-          </div>
+        <div class="field">
+          <label style="font-weight:700; font-size:12.5px;">ชื่อสินค้า (Product Name) *</label>
+          <input class="input" id="pName" placeholder="เช่น Strawberry Cheesecake, Croissant..." value="${existing ? escapeHTML(existing.name) : ''}"/>
         </div>
 
         <div class="grid" style="grid-template-columns: 1fr 1fr; gap:12px">
           <div class="field">
-            <label>หมวดหมู่ (Category)</label>
+            <label style="font-weight:700; font-size:12.5px;">หมวดหมู่ (Category)</label>
             <select class="select" id="pCat">
               ${CATEGORIES.map(c => `<option value="${c.name}" ${(existing ? existing.cat === c.name : (prefillCat === c.name)) ? 'selected' : ''}>${c.name}</option>`).join('')}
               <option value="__NEW__">+ สร้างหมวดหมู่ใหม่...</option>
             </select>
           </div>
           <div class="field">
-            <label>ราคา (${state.store.currency || '฿'}) *</label>
+            <label style="font-weight:700; font-size:12.5px;">ราคา (${state.store.currency || '฿'}) *</label>
             <input type="number" step="0.01" class="input" id="pPrice" value="${existing ? existing.price : 8.50}"/>
           </div>
         </div>
 
         <div class="field" id="newCatWrap" style="display:none;">
-          <label>ชื่อหมวดหมู่ใหม่ที่ต้องการเพิ่ม</label>
+          <label style="font-weight:700; font-size:12.5px;">ชื่อหมวดหมู่ใหม่ที่ต้องการเพิ่ม</label>
           <input class="input" id="newCustomCatName" placeholder="เช่น Cakes, Specials, Coffee..." />
         </div>
 
         <div class="grid" style="grid-template-columns: 1fr 1fr; gap:12px">
           <div class="field">
-            <label>จำนวนสต็อก (Stock Quantity) *</label>
+            <label style="font-weight:700; font-size:12.5px;">จำนวนสต็อก (Stock Quantity) *</label>
             <input type="number" class="input" id="pStock" value="${existing ? existing.stock : 50}"/>
           </div>
           <div class="field">
-            <label>คำบรรยาย / รสชาติ (Description / Flavor)</label>
+            <label style="font-weight:700; font-size:12.5px;">คำบรรยาย / รสชาติ (Description / Flavor)</label>
             <input class="input" id="pFlavor" placeholder="เช่น สตรอว์เบอร์รี่สด ครีมนุ่มละมุน" value="${existing?.flavor ? escapeHTML(existing.flavor) : ''}"/>
           </div>
         </div>
@@ -2597,10 +2639,8 @@
     const fileInp = body.querySelector('#prodPhotoUpload');
     const triggerBtn = body.querySelector('#btnUploadPhotoTrigger');
     const previewImg = body.querySelector('#prodImgPreview');
-    const previewEmoji = body.querySelector('#prodEmojiPreview');
+    const noPhotoPrompt = body.querySelector('#prodNoPhotoPrompt');
     const urlInp = body.querySelector('#pImageUrl');
-    const emojiInp = body.querySelector('#pEmoji');
-    const clearBtn = body.querySelector('#btnClearPhoto');
     const catSelect = body.querySelector('#pCat');
     const newCatWrap = body.querySelector('#newCatWrap');
 
@@ -2615,14 +2655,14 @@
         currentImage = publicUrl;
         previewImg.src = currentImage;
         previewImg.style.display = 'block';
-        previewEmoji.style.display = 'none';
+        if (noPhotoPrompt) noPhotoPrompt.style.display = 'none';
         urlInp.value = currentImage;
         toast('อัปโหลดรูปภาพสินค้าเรียบร้อย ✨', 'success');
       } catch (err) {
         toast('อัปโหลดไม่สำเร็จ: ' + (err.message || err), 'error');
       } finally {
         triggerBtn.disabled = false;
-        triggerBtn.textContent = 'อัปโหลดรูปภาพ';
+        triggerBtn.textContent = '📷 เลือกรูปภาพจากเครื่อง';
       }
     });
 
@@ -2632,28 +2672,11 @@
       if (val) {
         previewImg.src = val;
         previewImg.style.display = 'block';
-        previewEmoji.style.display = 'none';
+        if (noPhotoPrompt) noPhotoPrompt.style.display = 'none';
       } else {
         previewImg.style.display = 'none';
-        previewEmoji.style.display = 'grid';
+        if (noPhotoPrompt) noPhotoPrompt.style.display = 'flex';
       }
-    });
-
-    emojiInp.addEventListener('input', (e) => {
-      currentEmoji = e.target.value || '🍰';
-      previewEmoji.textContent = currentEmoji;
-      if (!currentImage) {
-        previewEmoji.style.display = 'grid';
-        previewImg.style.display = 'none';
-      }
-    });
-
-    clearBtn.addEventListener('click', () => {
-      currentImage = '';
-      urlInp.value = '';
-      previewImg.style.display = 'none';
-      previewEmoji.style.display = 'grid';
-      toast('เปลี่ยนเป็นใช้อิโมจิแล้ว', 'info');
     });
 
     catSelect.addEventListener('change', (e) => {
@@ -2679,17 +2702,20 @@
               cat = 'Bakery';
             }
           }
-          const emoji = $('#pEmoji')?.value.trim() || '🍰';
           const price = Number($('#pPrice')?.value || 8.50);
           const stock = Number($('#pStock')?.value || 50);
           const flavor = $('#pFlavor')?.value.trim() || '';
           const status = stock === 0 ? 'out' : stock < 10 ? 'low' : 'active';
           const image = (urlInp?.value && urlInp.value.trim() && urlInp.value !== '(Uploaded Photo)') ? urlInp.value.trim() : (currentImage || '');
 
+          if (!image) {
+            toast('กรุณาอัปโหลดรูปภาพสินค้าก่อนบันทึก (จำเป็นต้องมีรูปภาพสินค้า)', 'error');
+            return;
+          }
+
           if (existing) {
             existing.name = name;
             existing.cat = cat;
-            existing.emoji = emoji;
             existing.image = image;
             existing.price = price;
             existing.stock = stock;
@@ -2697,17 +2723,29 @@
             existing.status = status;
             if (supabase) {
               const { error } = await supabase.from('products').update({
-                name, emoji, price, stock, status, flavor,
+                name, price, stock, status, flavor,
                 image_url: image || null
               }).eq('id', existing.id);
               if (error) { toast('บันทึกไม่สำเร็จ: ' + error.message, 'error'); return; }
             }
             toast(`อัปเดตสินค้า "${name}" แล้ว`, 'success');
+            renderPage();
           } else {
+            let newId = 'prod_' + Date.now();
+            let newProd = {
+              id: newId,
+              name,
+              cat,
+              price,
+              stock,
+              status,
+              flavor,
+              image
+            };
+
             if (supabase) {
               const { data: inserted, error } = await supabase.from('products').insert({
                 name,
-                emoji,
                 price,
                 stock,
                 status,
@@ -2716,42 +2754,26 @@
                 store_id: '00000000-0000-0000-0000-000000000001'
               }).select().single();
 
-              if (error) {
-                toast('สร้างสินค้าไม่สำเร็จ: ' + error.message, 'error');
-                return;
-              }
-
-              if (inserted) {
-                const newProd = {
+              if (!error && inserted) {
+                newProd = {
                   id: inserted.id,
                   name: inserted.name,
-                  cat: cat || 'Bakery',
-                  level: 1,
-                  price: Number(inserted.price || 0),
-                  stock: Number(inserted.stock !== undefined ? inserted.stock : 0),
-                  emoji: inserted.emoji || '🍰',
-                  image: inserted.image_url || '',
-                  flavor: inserted.flavor || '',
-                  status: (inserted.stock === 0 || inserted.status === 'out_of_stock') ? 'out' : (inserted.stock < 10) ? 'low' : 'active'
+                  cat: inserted.cat || cat,
+                  price: Number(inserted.price || price),
+                  stock: Number(inserted.stock !== undefined ? inserted.stock : stock),
+                  status: inserted.status || status,
+                  flavor: inserted.flavor || flavor,
+                  image: inserted.image_url || image
                 };
-                if (!PRODUCTS.find(x => String(x.id) === String(inserted.id))) {
-                  PRODUCTS.unshift(newProd);
-                }
               }
-            } else {
-              const newProd = {
-                id: Date.now(),
-                name, cat, level: 1, price, stock, emoji, image, flavor, status
-              };
-              PRODUCTS.unshift(newProd);
             }
-            toast(`สร้างสินค้าใหม่ "${name}" สำเร็จแล้ว!`, 'success');
-          }
 
-          renderPage();
+            PRODUCTS.unshift(newProd);
+            toast(`สร้างสินค้า "${name}" สำเร็จ`, 'success');
+            renderPage();
+          }
         }}
       ]
-    });
   }
 
   // ============================================================
@@ -5399,24 +5421,35 @@
         return sum + (p ? Number(p.price) * Number(q) : 0);
       }, 0);
 
-      // Only show floating button on Store page when there are selected items
+      // Only show floating button on Store page when there are selected items and not on cart/checkout tabs
       if (totalQty > 0 && state.page === 'store') {
         if (!floatBtn) {
           floatBtn = el(`
-            <button type="button" id="storeFloatingCartBtn" class="floating-cart-btn" title="ดูตะกร้าสินค้า">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
-              <span id="floatCartText">ตะกร้าสินค้า (${totalQty} ชิ้น · ${money(totalPrice)}) →</span>
+            <button type="button" id="storeFloatingCartBtn" class="floating-cart-btn" title="ไปที่ตะกร้าสินค้า">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" style="display:inline-block; vertical-align:middle;"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
+              <span id="floatCartItemsCount" class="float-cart-count">${totalQty}</span>
+              <span id="floatCartPriceText">${money(totalPrice)}</span>
+              <span style="font-size:13px; font-weight:800;">→</span>
             </button>
           `);
-          floatBtn.addEventListener('click', () => {
-            root.querySelectorAll('#storeTabs .tab').forEach(x => x.classList.remove('active'));
-            root.querySelector('#storeTabs [data-s="cart"]')?.classList.add('active');
-            drawStore('cart');
+          floatBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const tabBtn = document.querySelector('#storeTabs [data-s="cart"]');
+            if (tabBtn) {
+              tabBtn.click();
+            } else {
+              root.querySelectorAll('#storeTabs .tab').forEach(x => x.classList.remove('active'));
+              root.querySelector('#storeTabs [data-s="cart"]')?.classList.add('active');
+              drawStore('cart');
+            }
           });
           document.body.appendChild(floatBtn);
         } else {
-          const txt = floatBtn.querySelector('#floatCartText');
-          if (txt) txt.textContent = `ตะกร้าสินค้า (${totalQty} ชิ้น · ${money(totalPrice)}) →`;
+          const countEl = floatBtn.querySelector('#floatCartItemsCount');
+          const priceEl = floatBtn.querySelector('#floatCartPriceText');
+          if (countEl) countEl.textContent = totalQty;
+          if (priceEl) priceEl.textContent = money(totalPrice);
           floatBtn.style.display = 'flex';
         }
       } else {
@@ -5556,9 +5589,10 @@
             <div class="product-grid" id="homePopularGrid">
               ${PRODUCTS.slice(0, 16).map(p => {
                 const qty = state.selected[p.id] || 0;
+                const imgUrl = p.image || DEFAULT_PRODUCT_IMG;
                 return `
                 <div class="product-tile ${qty ? 'selected' : ''}" data-id="${p.id}" title="${escapeHTML(p.name)} · ${money(p.price)}">
-                  ${p.image ? `<img src="${escapeHTML(p.image)}" alt="${escapeHTML(p.name)}" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='grid';" /><span style="display:none">${p.emoji || '🍰'}</span>` : `${p.emoji || '🍰'}`}
+                  <img src="${escapeHTML(imgUrl)}" alt="${escapeHTML(p.name)}" onerror="this.src='${DEFAULT_PRODUCT_IMG}';" />
                   <span class="qty-badge">${qty}</span>
                 </div>`;
               }).join('')}
@@ -5704,10 +5738,8 @@
           items.forEach(p => {
             const sInfo = getStockStatusInfo(p.stock);
             const stockCls = sInfo.dotClass;
-            const qty = state.selected[p.id] || 0;
-            const mediaHtml = p.image
-              ? `<img src="${escapeHTML(p.image)}" alt="${escapeHTML(p.name)}" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='grid';" /><span style="display:none;">${p.emoji || '🍰'}</span>`
-              : `<span>${p.emoji || '🍰'}</span>`;
+            const imgUrl = p.image || DEFAULT_PRODUCT_IMG;
+            const mediaHtml = `<img src="${escapeHTML(imgUrl)}" alt="${escapeHTML(p.name)}" onerror="this.src='${DEFAULT_PRODUCT_IMG}';" />`;
             const tile = el(`
               <div class="product-tile ${stockCls} ${qty ? 'selected' : ''}" data-id="${p.id}" title="${escapeHTML(p.name)} · ${money(p.price)}">
                 ${mediaHtml}
@@ -6106,7 +6138,7 @@
           persistOrders();
           notifyNewOrder(newOrder);
 
-          // 1. Instant Real-time WebSocket Broadcast to Admin and all devices
+          // 1. Instant Real-time WebSocket Broadcast to Admin and all connected devices
           if (syncChannel) {
             try {
               syncChannel.send({
@@ -6119,10 +6151,10 @@
             }
           }
 
-          // 2. Persist to Supabase Database table 'orders'
+          // 2. Persist to Supabase Database table 'orders' & 'order_items'
           if (supabase) {
             try {
-              await supabase.from('orders').insert({
+              const { data: insertedOrder, error: ordErr } = await supabase.from('orders').insert({
                 store_id: '00000000-0000-0000-0000-000000000001',
                 order_number: newOrderNumber,
                 customer_id: null,
@@ -6133,13 +6165,31 @@
                 status: 'waiting',
                 payment_method: 'qr',
                 note: `Customer: ${name} | Farm: ${farmName} (${farmTag}) | Contact: ${contact} | Promo: ${state.appliedPromo?.code || '-'}`
-              });
+              }).select().single();
+
+              if (!ordErr && insertedOrder) {
+                const itemRows = Object.entries(state.selected).map(([id, q]) => {
+                  const p = PRODUCTS.find(x => String(x.id) === String(id));
+                  return {
+                    order_id: insertedOrder.id,
+                    product_id: p && !String(p.id).startsWith('prod_') ? p.id : null,
+                    product_name: p ? p.name : 'Item',
+                    quantity: Number(q),
+                    unit_price: Number(p ? p.price : 0),
+                    total: Number((p ? p.price : 0) * Number(q))
+                  };
+                });
+                if (itemRows.length > 0) {
+                  await supabase.from('order_items').insert(itemRows);
+                }
+              }
             } catch (dbErr) {
               console.warn('Supabase orders table insert notice:', dbErr);
             }
           }
 
           state.selected = {};
+          updateFloatingCartBtn();
           toast('สั่งซื้อและแนบสลิปสำเร็จเรียบร้อย', 'success');
           root.querySelectorAll('#storeTabs .tab').forEach(x => x.classList.remove('active'));
           root.querySelector('#storeTabs [data-s="receipt"]').classList.add('active');
