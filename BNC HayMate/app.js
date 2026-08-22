@@ -2444,85 +2444,244 @@
   };
 
   // ============================================================
-  // PAGE 8: Promotions
+  // PAGE 8: Promotions & Discount Codes Management
   // ============================================================
+  function openPromotionModal(existing = null) {
+    const isEdit = !!existing;
+    let initialType = 'percent';
+    let initialVal = 10;
+    if (existing) {
+      if (existing.off && existing.off.includes('%')) {
+        initialType = 'percent';
+        const m = existing.off.match(/(\d+(?:\.\d+)?)/);
+        if (m) initialVal = m[1];
+      } else if (existing.off && (existing.off.includes('฿') || existing.type === 'Fixed')) {
+        initialType = 'fixed';
+        const m = existing.off.match(/(\d+(?:\.\d+)?)/);
+        if (m) initialVal = m[1];
+      } else {
+        initialType = 'custom';
+      }
+    }
+
+    const body = el(`
+      <div class="grid" style="gap:14px;">
+        <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="field">
+            <label style="font-weight:700;">Promo Code (รหัสโค้ดส่วนลด) *</label>
+            <input class="input" id="pCode" placeholder="เช่น SUMMER20, VIP100" value="${existing ? escapeHTML(existing.code) : ''}" style="text-transform:uppercase; font-weight:700;" />
+          </div>
+          <div class="field">
+            <label style="font-weight:700;">Discount Mode (รูปแบบส่วนลด)</label>
+            <select class="select" id="pDiscountMode">
+              <option value="percent" ${initialType === 'percent' ? 'selected' : ''}>เปอร์เซ็นต์ (% Off)</option>
+              <option value="fixed" ${initialType === 'fixed' ? 'selected' : ''}>จำนวนเงินคงที่ (฿ Fixed Amount)</option>
+              <option value="custom" ${initialType === 'custom' ? 'selected' : ''}>กำหนดข้อความเอง (Custom Campaign)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="field" id="valFieldWrap">
+            <label style="font-weight:700;" id="pValLabel">ระบุมูลค่าส่วนลด (กำหนดตัวเลขเอง) *</label>
+            <div style="position:relative; display:flex; align-items:center;">
+              <input type="number" step="0.5" min="1" class="input" id="pDiscountVal" placeholder="เช่น 15, 20, 100" value="${initialVal}" style="padding-right:38px; font-weight:700;" />
+              <span id="pValUnit" style="position:absolute; right:12px; font-weight:800; color:var(--accent-text); font-size:14px;">${initialType === 'fixed' ? '฿' : '%'}</span>
+            </div>
+          </div>
+          <div class="field">
+            <label style="font-weight:700;">Status (สถานะโปรโมชั่น)</label>
+            <select class="select" id="pStatus">
+              <option value="active" ${(!existing || existing.status === 'active') ? 'selected' : ''}>Active (เปิดใช้งาน)</option>
+              <option value="scheduled" ${existing?.status === 'scheduled' ? 'selected' : ''}>Scheduled (ตั้งเวลาล่วงหน้า)</option>
+              <option value="expired" ${existing?.status === 'expired' ? 'selected' : ''}>Expired (ปิด/หมดอายุ)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label style="font-weight:700;">Discount Label (ข้อความแสดงส่วนลด เช่น 15% off, ฿100 off)</label>
+          <input class="input" id="pOff" placeholder="เช่น 15% off, ฿100 off" value="${existing ? escapeHTML(existing.off) : '10% off'}" />
+          <div style="font-size:11.5px; color:var(--muted); margin-top:3px;">ข้อความนี้จะแสดงในแท็กคูปองแนะนำและนำไปคำนวณหักยอดเงินในตะกร้าอัตโนมัติ</div>
+        </div>
+
+        <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="field">
+            <label style="font-weight:700;">Start Date (วันเริ่มต้น)</label>
+            <input type="date" class="input" id="pStart" value="${existing?.start || new Date().toISOString().split('T')[0]}" />
+          </div>
+          <div class="field">
+            <label style="font-weight:700;">End Date (วันสิ้นสุด)</label>
+            <input type="date" class="input" id="pEnd" value="${existing?.end || '2026-12-31'}" />
+          </div>
+        </div>
+      </div>
+    `);
+
+    // Auto-update discount label on value or mode change
+    const modeSelect = body.querySelector('#pDiscountMode');
+    const valInput = body.querySelector('#pDiscountVal');
+    const valUnit = body.querySelector('#pValUnit');
+    const offInput = body.querySelector('#pOff');
+
+    const updateOffLabel = () => {
+      const mode = modeSelect.value;
+      const val = parseFloat(valInput.value) || 0;
+      if (mode === 'percent') {
+        valUnit.textContent = '%';
+        valInput.disabled = false;
+        offInput.value = `${val}% off`;
+      } else if (mode === 'fixed') {
+        valUnit.textContent = '฿';
+        valInput.disabled = false;
+        offInput.value = `฿${val} off`;
+      } else {
+        valUnit.textContent = '';
+        valInput.disabled = true;
+      }
+    };
+
+    modeSelect.addEventListener('change', updateOffLabel);
+    valInput.addEventListener('input', updateOffLabel);
+
+    openModal({
+      title: isEdit ? `Edit Promotion (${existing.code})` : 'Create New Promotion (สร้างโค้ดส่วนลดใหม่)',
+      body,
+      actions: [
+        { label: 'Cancel', kind: 'ghost' },
+        {
+          label: isEdit ? 'Update Promotion (บันทึก)' : 'Create Promotion (สร้าง)',
+          kind: 'primary',
+          onClick: async () => {
+            const code = (body.querySelector('#pCode')?.value || '').trim().toUpperCase();
+            if (!code) return toast('โปรดระบุ Promo Code', 'error');
+
+            const mode = body.querySelector('#pDiscountMode')?.value || 'percent';
+            const rawVal = parseFloat(body.querySelector('#pDiscountVal')?.value) || 0;
+            const off = (body.querySelector('#pOff')?.value || '').trim() || (mode === 'percent' ? `${rawVal}% off` : `฿${rawVal} off`);
+            const status = body.querySelector('#pStatus')?.value || 'active';
+            const start = body.querySelector('#pStart')?.value || new Date().toISOString().split('T')[0];
+            const end = body.querySelector('#pEnd')?.value || '2026-12-31';
+            const type = mode === 'percent' ? 'Coupon' : mode === 'fixed' ? 'Fixed' : 'Campaign';
+
+            if (isEdit) {
+              existing.code = code;
+              existing.type = type;
+              existing.off = off;
+              existing.start = start;
+              existing.end = end;
+              existing.status = status;
+              toast(`อัปเดตโปรโมชั่น "${code}" (${off}) เรียบร้อยแล้ว! ✨`, 'success');
+            } else {
+              PROMOTIONS.unshift({ code, type, off, start, end, status });
+              toast(`สร้างโปรโมชั่น "${code}" (${off}) สำเร็จ! 🎉`, 'success');
+            }
+
+            if (supabase) {
+              await supabase.from('promotions').upsert({
+                code,
+                type: mode === 'percent' ? 'percent' : 'fixed',
+                discount: rawVal,
+                start_date: start,
+                end_date: end,
+                status
+              }).catch(() => {});
+            }
+
+            renderPage();
+          }
+        }
+      ]
+    });
+  }
+
   PAGES.promotions = (root) => {
     root.appendChild(el(`
       <div class="page-head">
-        <div><h1 class="page-title">Promotions</h1><div class="page-sub">Coupons, campaigns, and flash sales</div></div>
-        <button class="btn btn-primary" id="addPromo">+ New Promotion</button>
+        <div><h1 class="page-title">Promotions &amp; Discounts</h1><div class="page-sub">จัดการคูปองส่วนลด แคมเปญ และโปรโมชั่นหน้าร้าน (${PROMOTIONS.length} รายการ)</div></div>
+        <button class="btn btn-primary" id="addPromo" style="font-weight:700;">+ Create Discount / Promotion</button>
       </div>
     `));
-    root.querySelector('#addPromo').addEventListener('click', () => openModal({
-      title: 'Create New Promotion',
-      body: el(`
-        <div class="grid" style="gap:12px">
-          <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px">
-            <div class="field"><label>Promo Code</label><input class="input" id="pCode" placeholder="HAYMATE10"/></div>
-            <div class="field"><label>Discount Type</label><select class="select" id="pType"><option>Coupon (10% off)</option><option>Fixed (฿50 off)</option><option>Flash Sale</option></select></div>
-          </div>
-          <div class="field"><label>Discount Label</label><input class="input" id="pOff" placeholder="10% off all pastries"/></div>
-          <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px">
-            <div class="field"><label>Start Date</label><input type="date" class="input" id="pStart" value="2026-08-01"/></div>
-            <div class="field"><label>End Date</label><input type="date" class="input" id="pEnd" value="2026-08-31"/></div>
-          </div>
-        </div>
-      `),
-      actions: [
-        { label: 'Cancel', kind: 'ghost' },
-        { label: 'Create Promotion', kind: 'primary', onClick: async () => {
-          const code = $('#pCode')?.value.trim() || 'SUMMER10';
-          const type = $('#pType')?.value || 'Coupon';
-          const off = $('#pOff')?.value.trim() || '10% off';
-          const start = $('#pStart')?.value || '2026-08-01';
-          const end = $('#pEnd')?.value || '2026-08-31';
-          PROMOTIONS.unshift({ code, type, off, start, end, status: 'active' });
-          if (supabase) await supabase.from('promotions').insert({ code, type: 'percent', discount: 10, status: 'active' });
-          toast('Promotion created', 'success');
-          renderPage();
-        }}
-      ]
-    }));
+
+    root.querySelector('#addPromo').addEventListener('click', () => openPromotionModal());
 
     const grid = el(`<div class="grid three-col"></div>`);
     root.appendChild(grid);
-    PROMOTIONS.slice(0, 3).forEach(p => {
-      grid.appendChild(el(`
+
+    PROMOTIONS.slice(0, 6).forEach(p => {
+      const card = el(`
         <div class="card">
           <div class="flex items-center" style="justify-content:space-between">
             <span class="badge ${p.status === 'active' ? 'success' : p.status === 'scheduled' ? 'info' : 'mute'}">${p.status}</span>
-            <span style="font-size:12px; color:var(--muted)">${p.type}</span>
+            <span style="font-size:12px; color:var(--muted); font-weight:600;">${p.type}</span>
           </div>
-          <div class="card-title" style="margin-top:10px; font-size:18px">${p.code}</div>
-          <div class="card-sub">${p.off}</div>
-          <div class="kv"><span class="k">Start</span><span class="v">${p.start}</span></div>
+          <div class="card-title" style="margin-top:10px; font-size:18px; color:var(--accent-text); font-weight:800;">${escapeHTML(p.code)}</div>
+          <div class="card-sub" style="font-size:13px; font-weight:700; color:var(--text);">${escapeHTML(p.off)}</div>
+          <div class="kv" style="margin-top:10px;"><span class="k">Start</span><span class="v">${p.start}</span></div>
           <div class="kv"><span class="k">End</span><span class="v">${p.end}</span></div>
-          <div class="flex gap-2 mt-3"><button class="btn btn-sm" style="flex:1" onclick="toast('Promotion updated', 'success')">Edit</button><button class="btn btn-sm btn-danger" style="flex:1" onclick="toast('Promotion ended', 'success')">End</button></div>
+          <div class="flex gap-2 mt-3">
+            <button class="btn btn-sm btn-edit-p" style="flex:1; font-weight:700;">Edit</button>
+            <button class="btn btn-sm ${p.status === 'active' ? 'btn-danger' : 'btn-outline'} btn-toggle-p" style="flex:1; font-weight:700;">
+              ${p.status === 'active' ? 'Disable' : 'Enable'}
+            </button>
+          </div>
         </div>
-      `));
+      `);
+
+      card.querySelector('.btn-edit-p').addEventListener('click', () => openPromotionModal(p));
+      card.querySelector('.btn-toggle-p').addEventListener('click', () => {
+        p.status = p.status === 'active' ? 'expired' : 'active';
+        toast(`เปลี่ยนสถานะโค้ด ${p.code} เป็น ${p.status} เรียบร้อย`, 'info');
+        renderPage();
+      });
+
+      grid.appendChild(card);
     });
 
     root.appendChild(el(`
       <div class="card" style="margin-top:18px; padding:0">
-        <div style="padding:16px 20px"><div class="card-title">All Campaigns</div><div class="card-sub">Active promotions</div></div>
+        <div style="padding:16px 20px"><div class="card-title">All Promotion Codes</div><div class="card-sub">รายการโค้ดส่วนลดทั้งหมดในระบบ</div></div>
         <div class="table-wrap">
           <table class="data">
-            <thead><tr><th>Code</th><th>Type</th><th>Discount</th><th>Start</th><th>End</th><th>Status</th></tr></thead>
+            <thead><tr><th>Code</th><th>Type</th><th>Discount</th><th>Start</th><th>End</th><th>Status</th><th style="text-align:right;">Actions</th></tr></thead>
             <tbody>
-              ${PROMOTIONS.map(p => `
+              ${PROMOTIONS.map((p, idx) => `
                 <tr>
-                  <td><strong>${p.code}</strong></td>
-                  <td>${p.type}</td>
-                  <td>${p.off}</td>
+                  <td><strong style="color:var(--accent-text); letter-spacing:0.5px;">${escapeHTML(p.code)}</strong></td>
+                  <td>${escapeHTML(p.type)}</td>
+                  <td><span style="font-weight:700; color:var(--text);">${escapeHTML(p.off)}</span></td>
                   <td>${p.start}</td>
                   <td>${p.end}</td>
                   <td><span class="badge ${p.status === 'active' ? 'success' : p.status === 'scheduled' ? 'info' : 'mute'}">${p.status}</span></td>
+                  <td style="text-align:right;">
+                    <button class="btn btn-sm btn-p-tbl-edit" data-idx="${idx}" style="padding:4px 10px; font-weight:600;">Edit</button>
+                    <button class="btn btn-sm btn-danger btn-p-tbl-del" data-idx="${idx}" style="padding:4px 8px; font-weight:600; margin-left:4px;">✕</button>
+                  </td>
                 </tr>`).join('')}
             </tbody>
           </table>
         </div>
       </div>
     `));
+
+    root.querySelectorAll('.btn-p-tbl-edit').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const p = PROMOTIONS[+btn.dataset.idx];
+        if (p) openPromotionModal(p);
+      });
+    });
+
+    root.querySelectorAll('.btn-p-tbl-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const p = PROMOTIONS[+btn.dataset.idx];
+        if (!p) return;
+        confirmDialog(`ต้องการลบโค้ดส่วนลด "${p.code}" หรือไม่?`, () => {
+          PROMOTIONS.splice(+btn.dataset.idx, 1);
+          toast(`ลบโค้ดส่วนลด "${p.code}" แล้ว`, 'success');
+          renderPage();
+        });
+      });
+    });
   };
 
   // ============================================================
