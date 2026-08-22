@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>BNC HayMate — POS &amp; Order Management</title>
+<script>
+  (function(){
+    try {
+      const c = localStorage.getItem('haypos_color') || '#F8BFD4';
+      const th = localStorage.getItem('haypos_theme') || 'light';
+      document.documentElement.setAttribute('data-theme', th);
+      let lt = 'BNC HayMate';
+      try {
+        const storeSettings = JSON.parse(localStorage.getItem('haypos_store_settings') || '{}');
+        lt = storeSettings.loadingTitle || storeSettings.name || 'BNC HayMate';
+      } catch(e){}
+      window.__SAVED_LOADING_TITLE = lt;
+      const palettes = {
+        '#F8BFD4': { light: {'--primary':'#F8BFD4','--primary-600':'#EFA6C1','--primary-700':'#DE85A7','--primary-100':'#FCE3EE','--primary-50':'#FDF1F6','--bg':'#FFF8FB','--card':'#FFFFFF','--border':'#F3DCE6','--text':'#333333','--muted':'#777777','--accent-text':'#B24C74','--shadow':'0 6px 20px rgba(248,191,212,0.22)','--shadow-soft':'0 2px 10px rgba(248,191,212,0.12)'}, dark: {'--primary':'#F8BFD4','--primary-600':'#EFA6C1','--primary-700':'#DE85A7','--primary-100':'#3A2530','--primary-50':'#2B1E25','--bg':'#1B1418','--card':'#241A20','--border':'#3E2732','--text':'#F4E8EE','--muted':'#B39BA6','--accent-text':'#F8BFD4','--shadow':'0 6px 20px rgba(0,0,0,0.4)','--shadow-soft':'0 2px 10px rgba(0,0,0,0.25)'} },
+        '#F0B265': { light: {'--primary':'#F0B265','--primary-600':'#E59838','--primary-700':'#D48320','--primary-100':'#FDF0DD','--primary-50':'#FFF9F2','--bg':'#FFFBF7','--card':'#FFFFFF','--border':'#F5E2CC','--text':'#333333','--muted':'#7A6A60','--accent-text':'#B66810','--shadow':'0 6px 20px rgba(240,178,101,0.22)','--shadow-soft':'0 2px 10px rgba(240,178,101,0.12)'}, dark: {'--primary':'#F0B265','--primary-600':'#E59838','--primary-700':'#D48320','--primary-100':'#38281A','--primary-50':'#281C10','--bg':'#18130E','--card':'#221B14','--border':'#3A2D20','--text':'#F5EBE1','--muted':'#B09F90','--accent-text':'#F0B265','--shadow':'0 6px 20px rgba(0,0,0,0.4)','--shadow-soft':'0 2px 10px rgba(0,0,0,0.25)'} },
+        '#7CC59A': { light: {'--primary':'#7CC59A','--primary-600':'#5EB281','--primary-700':'#489A6A','--primary-100':'#E3F5EB','--primary-50':'#F2FAF5','--bg':'#F6FCF8','--card':'#FFFFFF','--border':'#D0EBDA','--text':'#28332D','--muted':'#687A70','--accent-text':'#2F7C50','--shadow':'0 6px 20px rgba(124,197,154,0.22)','--shadow-soft':'0 2px 10px rgba(124,197,154,0.12)'}, dark: {'--primary':'#7CC59A','--primary-600':'#5EB281','--primary-700':'#489A6A','--primary-100':'#1C3325','--primary-50':'#14241B','--bg':'#0E1812','--card':'#16221A','--border':'#23382B','--text':'#E3F2E9','--muted':'#8DA396','--accent-text':'#7CC59A','--shadow':'0 6px 20px rgba(0,0,0,0.4)','--shadow-soft':'0 2px 10px rgba(0,0,0,0.25)'} },
+        '#8BB6E8': { light: {'--primary':'#8BB6E8','--primary-600':'#6AA0DE','--primary-700':'#5189CD','--primary-100':'#E5F0FC','--primary-50':'#F4F8FD','--bg':'#F7FAFD','--card':'#FFFFFF','--border':'#D4E5F7','--text':'#28303B','--muted':'#6A7888','--accent-text':'#336DAE','--shadow':'0 6px 20px rgba(139,182,232,0.22)','--shadow-soft':'0 2px 10px rgba(139,182,232,0.12)'}, dark: {'--primary':'#8BB6E8','--primary-600':'#6AA0DE','--primary-700':'#5189CD','--primary-100':'#1A283A','--primary-50':'#121E2C','--bg':'#0D1622','--card':'#131F2E','--border':'#1F3248','--text':'#E6EEF8','--muted':'#8B9DB2','--accent-text':'#8BB6E8','--shadow':'0 6px 20px rgba(0,0,0,0.4)','--shadow-soft':'0 2px 10px rgba(0,0,0,0.25)'} },
+        '#D6BEE9': { light: {'--primary':'#D6BEE9','--primary-600':'#C19FDC','--primary-700':'#AD82D0','--primary-100':'#F4ECFA','--primary-50':'#FAF6FD','--bg':'#FCF9FE','--card':'#FFFFFF','--border':'#EBDCF5','--text':'#302838','--muted':'#786B83','--accent-text':'#7D47A6','--shadow':'0 6px 20px rgba(214,190,233,0.22)','--shadow-soft':'0 2px 10px rgba(214,190,233,0.12)'}, dark: {'--primary':'#D6BEE9','--primary-600':'#C19FDC','--primary-700':'#AD82D0','--primary-100':'#2E2138','--primary-50':'#22182B','--bg':'#17111D','--card':'#201728','--border':'#362744','--text':'#F1E9F6','--muted':'#A596B3','--accent-text':'#D6BEE9','--shadow':'0 6px 20px rgba(0,0,0,0.4)','--shadow-soft':'0 2px 10px rgba(0,0,0,0.25)'} }
+      };
+      const pal = palettes[c] || palettes['#F8BFD4'];
+      const v = pal[th] || pal.light;
+      let cssRules = ':root, html, body, #loadingOverlay {';
+      for (const k in v) {
+        document.documentElement.style.setProperty(k, v[k]);
+        cssRules += k + ':' + v[k] + ' !important;';
+      }
+      cssRules += '}';
+      document.write('<style id="criticalTheme">' + cssRules + '</style>');
+    } catch(e){}
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sunshiney&family=Dancing+Script:wght@600;700&family=Playfair+Display:ital,wght@1,600;1,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=block" rel="stylesheet">
+<!-- Supabase JS -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="styles.css?v=2024ZY" />
+</head>
+<body>
+  <div id="app" class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand" id="brandLogoBtn" style="cursor:pointer;" title="BNC HayMate">
+        <div class="brand-mark">B</div>
+        <div class="brand-name">
+          <span class="brand-title">BNC HayMate</span>
+          <span class="brand-sub" id="sidebarStoreSub">Storefront</span>
+        </div>
+      </div>
+      <nav class="menu" id="menu"></nav>
+      <div class="side-foot" id="sidebarFoot"></div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-btn menu-toggle" id="menuToggle" aria-label="Menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16" stroke-linecap="round"/></svg>
+        </button>
+        <div class="search-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5" stroke-linecap="round"/></svg>
+          <input type="text" id="globalSearchInput" placeholder="Search products, orders, customers..." />
+        </div>
+        <div class="top-actions">
+          <div class="notif-wrap" id="notifWrap" style="display:none;">
+            <button class="icon-btn" title="การแจ้งเตือนสต็อกสินค้า" id="notifBtn" aria-label="Stock Notifications">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+              <span class="notif-badge" id="notifBadge">0</span>
+            </button>
+            <div class="notif-dropdown" id="notifDropdown">
+              <div class="notif-head">
+                <div class="notif-head-title">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--danger);"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+                  <span>แจ้งเตือนสต็อกสินค้า</span>
+                  <span class="badge warn" id="notifCountBadge" style="font-size:10px; padding:2px 7px;">0</span>
+                </div>
+                <button type="button" class="btn btn-sm btn-ghost" id="btnClearNotifs" style="font-size:11.5px; font-weight:700; color:var(--danger); padding:4px 8px; border:none; background:transparent; cursor:pointer;">ล้างแจ้งเตือนทั้งหมด</button>
+              </div>
+              <div class="notif-body" id="notifList"></div>
+              <div class="notif-foot">
+                <span style="font-size:11px; color:var(--muted);" id="notifFootInfo">แจ้งเตือนสินค้าเหลือน้อยและหมด</span>
+                <button type="button" class="btn btn-sm" id="btnGoToStockPage" style="font-size:11.5px; font-weight:700; background:var(--card); color:var(--accent-text); border:1px solid var(--border);">ไปที่หน้า Stock →</button>
+              </div>
+            </div>
+          </div>
+
+          <button class="icon-btn" title="Toggle Theme" id="themeToggle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="user-chip" id="userChip" style="cursor:pointer;" title="Click for Admin Login">
+            <div class="avatar" id="topAvatar">G</div>
+            <div class="user-meta">
+              <span class="user-name" id="topUserName">Guest Customer</span>
+              <span class="user-role" id="topUserRole">Storefront Mode</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Dynamic Page Container -->
+      <section class="page" id="page"></section>
+    </main>
+  </div>
+
+  <!-- Cute Loading Tube Screen with Sunshiney Title & Falling Snow -->
+  <div id="loadingOverlay">
+    <div class="snow-container" id="snowContainer" aria-hidden="true"></div>
+    <div class="loading-title" id="loadingTitle">BNC HayMate</div>
+    <script>try{if(window.__SAVED_LOADING_TITLE)document.getElementById('loadingTitle').textContent=window.__SAVED_LOADING_TITLE;}catch(e){}</script>
+    <div class="loading-tube">
+      <div class="loading-fill" id="loadingFill"></div>
+      <div class="loading-percent-text" id="loadingPercentText">0%</div>
+    </div>
+  </div>
+
+  <!-- Modal and Toast Portals -->
+  <div id="modalRoot" class="modal-root"></div>
+  <div id="toastRoot" class="toast-root"></div>
+
+  <!-- Main Application Script -->
+  <script src="app.js?v=2024ZY"></script>
+</body>
+</html>
