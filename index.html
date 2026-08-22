@@ -7,31 +7,16 @@
 <script>
   (function(){
     try {
-      const c = localStorage.getItem('haypos_color') || '#F8BFD4';
-      const th = localStorage.getItem('haypos_theme') || 'light';
-      document.documentElement.setAttribute('data-theme', th);
+      localStorage.setItem('haypos_theme', 'light');
+      document.documentElement.setAttribute('data-theme', 'light');
       let lt = 'BNC HayMate';
       try {
         const storeSettings = JSON.parse(localStorage.getItem('haypos_store_settings') || '{}');
+        storeSettings.theme = 'light';
+        localStorage.setItem('haypos_store_settings', JSON.stringify(storeSettings));
         lt = storeSettings.loadingTitle || storeSettings.name || 'BNC HayMate';
       } catch(e){}
       window.__SAVED_LOADING_TITLE = lt;
-      const palettes = {
-        '#F8BFD4': { light: {'--primary':'#F8BFD4','--primary-600':'#EFA6C1','--primary-700':'#DE85A7','--primary-100':'#FCE3EE','--primary-50':'#FDF1F6','--bg':'#FFF8FB','--card':'#FFFFFF','--border':'#F3DCE6','--text':'#333333','--muted':'#777777','--accent-text':'#B24C74','--shadow':'0 6px 20px rgba(248,191,212,0.22)','--shadow-soft':'0 2px 10px rgba(248,191,212,0.12)'}, dark: {'--primary':'#F8BFD4','--primary-600':'#EFA6C1','--primary-700':'#DE85A7','--primary-100':'#3A2530','--primary-50':'#2B1E25','--bg':'#1B1418','--card':'#241A20','--border':'#3E2732','--text':'#F4E8EE','--muted':'#B39BA6','--accent-text':'#F8BFD4','--shadow':'0 6px 20px rgba(0,0,0,0.4)','--shadow-soft':'0 2px 10px rgba(0,0,0,0.25)'} },
-        '#F0B265': { light: {'--primary':'#F0B265','--primary-600':'#E59838','--primary-700':'#D48320','--primary-100':'#FDF0DD','--primary-50':'#FFF9F2','--bg':'#FFFBF7','--card':'#FFFFFF','--border':'#F5E2CC','--text':'#333333','--muted':'#7A6A60','--accent-text':'#B66810','--shadow':'0 6px 20px rgba(240,178,101,0.22)','--shadow-soft':'0 2px 10px rgba(240,178,101,0.12)'}, dark: {'--primary':'#F0B265','--primary-600':'#E59838','--primary-700':'#D48320','--primary-100':'#38281A','--primary-50':'#281C10','--bg':'#18130E','--card':'#221B14','--border':'#3A2D20','--text':'#F5EBE1','--muted':'#B09F90','--accent-text':'#F0B265','--shadow':'0 6px 20px rgba(0,0,0,0.4)','--shadow-soft':'0 2px 10px rgba(0,0,0,0.25)'} },
-        '#7CC59A': { light: {'--primary':'#7CC59A','--primary-600':'#5EB281','--primary-700':'#489A6A','--primary-100':'#E3F5EB','--primary-50':'#F2FAF5','--bg':'#F6FCF8','--card':'#FFFFFF','--border':'#D0EBDA','--text':'#28332D','--muted':'#687A70','--accent-text':'#2F7C50','--shadow':'0 6px 20px rgba(124,197,154,0.22)','--shadow-soft':'0 2px 10px rgba(124,197,154,0.12)'}, dark: {'--primary':'#7CC59A','--primary-600':'#5EB281','--primary-700':'#489A6A','--primary-100':'#1C3325','--primary-50':'#14241B','--bg':'#0E1812','--card':'#16221A','--border':'#23382B','--text':'#E3F2E9','--muted':'#8DA396','--accent-text':'#7CC59A','--shadow':'0 6px 20px rgba(0,0,0,0.4)','--shadow-soft':'0 2px 10px rgba(0,0,0,0.25)'} },
-        '#8BB6E8': { light: {'--primary':'#8BB6E8','--primary-600':'#6AA0DE','--primary-700':'#5189CD','--primary-100':'#E5F0FC','--primary-50':'#F4F8FD','--bg':'#F7FAFD','--card':'#FFFFFF','--border':'#D4E5F7','--text':'#28303B','--muted':'#6A7888','--accent-text':'#336DAE','--shadow':'0 6px 20px rgba(139,182,232,0.22)','--shadow-soft':'0 2px 10px rgba(139,182,232,0.12)'}, dark: {'--primary':'#8BB6E8','--primary-600':'#6AA0DE','--primary-700':'#5189CD','--primary-100':'#1A283A','--primary-50':'#121E2C','--bg':'#0D1622','--card':'#131F2E','--border':'#1F3248','--text':'#E6EEF8','--muted':'#8B9DB2','--accent-text':'#8BB6E8','--shadow':'0 6px 20px rgba(0,0,0,0.4)','--shadow-soft':'0 2px 10px rgba(0,0,0,0.25)'} },
-        '#D6BEE9': { light: {'--primary':'#D6BEE9','--primary-600':'#C19FDC','--primary-700':'#AD82D0','--primary-100':'#F4ECFA','--primary-50':'#FAF6FD','--bg':'#FCF9FE','--card':'#FFFFFF','--border':'#EBDCF5','--text':'#302838','--muted':'#786B83','--accent-text':'#7D47A6','--shadow':'0 6px 20px rgba(214,190,233,0.22)','--shadow-soft':'0 2px 10px rgba(214,190,233,0.12)'}, dark: {'--primary':'#D6BEE9','--primary-600':'#C19FDC','--primary-700':'#AD82D0','--primary-100':'#2E2138','--primary-50':'#22182B','--bg':'#17111D','--card':'#201728','--border':'#362744','--text':'#F1E9F6','--muted':'#A596B3','--accent-text':'#D6BEE9','--shadow':'0 6px 20px rgba(0,0,0,0.4)','--shadow-soft':'0 2px 10px rgba(0,0,0,0.25)'} }
-      };
-      const pal = palettes[c] || palettes['#F8BFD4'];
-      const v = pal[th] || pal.light;
-      let cssRules = ':root, html, body, #loadingOverlay {';
-      for (const k in v) {
-        document.documentElement.style.setProperty(k, v[k]);
-        cssRules += k + ':' + v[k] + ' !important;';
-      }
-      cssRules += '}';
-      document.write('<style id="criticalTheme">' + cssRules + '</style>');
     } catch(e){}
   })();
 </script>
@@ -42,7 +27,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="styles.css?v=2024AAC" />
+<link rel="stylesheet" href="styles.css?v=2024AAY" />
 </head>
 <body>
   <div id="app" class="app">
@@ -126,6 +111,6 @@
   <div id="toastRoot" class="toast-root"></div>
 
   <!-- Main Application Script -->
-  <script src="app.js?v=2024AAC"></script>
+  <script src="app.js?v=2024AAY"></script>
 </body>
 </html>
