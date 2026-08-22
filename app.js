@@ -23,33 +23,47 @@
   }
 
   // ============================================================
-  // Supabase Storage: Upload product image, return public URL
+  // Supabase Storage: Upload product / QR image, return URL
   // ============================================================
   async function uploadProductImage(file) {
-    if (!supabase) throw new Error('Supabase ไม่พร้อมใช้งาน');
-    const MAX_SIZE = 2 * 1024 * 1024; // 2 MB
-    if (file.size > MAX_SIZE) throw new Error('รูปภาพต้องมีขนาดไม่เกิน 2 MB');
+    const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
+    if (file.size > MAX_SIZE) throw new Error('รูปภาพต้องมีขนาดไม่เกิน 5 MB');
     if (!file.type.startsWith('image/')) throw new Error('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
 
-    // Check auth session — Storage policies require authenticated admin
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error('กรุณาเข้าสู่ระบบด้วย Email/Password เพื่ออัปโหลดรูปภาพ');
+    // 1. Try uploading directly to Supabase Storage
+    if (supabase) {
+      try {
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const storeId = '00000000-0000-0000-0000-000000000001';
+        const filePath = `${storeId}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
 
-    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-    const storeId = '00000000-0000-0000-0000-000000000001';
-    const filePath = `${storeId}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from('product-images')
+          .upload(filePath, file, { upsert: true, contentType: file.type });
 
-    const { error: uploadError } = await supabase.storage
-      .from('product-images')
-      .upload(filePath, file, { upsert: false, contentType: file.type });
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage
+            .from('product-images')
+            .getPublicUrl(filePath);
 
-    if (uploadError) throw uploadError;
+          if (urlData && urlData.publicUrl) {
+            return urlData.publicUrl;
+          }
+        } else {
+          console.warn('Supabase storage upload notice, falling back to data URL:', uploadError.message);
+        }
+      } catch (err) {
+        console.warn('Supabase storage exception, falling back to data URL:', err);
+      }
+    }
 
-    const { data: urlData } = supabase.storage
-      .from('product-images')
-      .getPublicUrl(filePath);
-
-    return urlData.publicUrl;
+    // 2. Seamless fallback: convert to Data URL so it is always persisted and synced across devices
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
   }
 
   
@@ -617,14 +631,36 @@
   async function loadSupabaseData() {
     if (!supabase) return;
     try {
-      const [pRes, cRes, oRes, cuRes, rRes, prRes] = await Promise.all([
+      const [pRes, cRes, oRes, cuRes, rRes, prRes, stRes, ssRes] = await Promise.all([
         supabase.from('products').select('*').order('id', { ascending: true }),
         supabase.from('categories').select('*').order('sort_order', { ascending: true }),
         supabase.from('orders').select('*').order('created_at', { ascending: false }),
         supabase.from('customers').select('*').order('created_at', { ascending: false }),
         supabase.from('reviews').select('*').order('created_at', { ascending: false }),
         supabase.from('promotions').select('*').order('created_at', { ascending: false }),
+        supabase.from('stores').select('*').limit(1),
+        supabase.from('store_settings').select('*').limit(1),
       ]);
+
+      if (stRes?.data && stRes.data[0]) {
+        const s = stRes.data[0];
+        if (s.name) state.store.name = s.name;
+        if (s.tagline) state.store.tagline = s.tagline;
+        if (s.currency) state.store.currency = s.currency;
+        if (s.timezone) state.store.timezone = s.timezone;
+      }
+
+      if (ssRes?.data && ssRes.data[0]) {
+        const ss = ssRes.data[0];
+        if (ss.qr_image_url) state.store.qr_image_url = ss.qr_image_url;
+        if (ss.bank_name) state.store.bank_name = ss.bank_name;
+        if (ss.bank_account) state.store.bank_account = ss.bank_account;
+        if (ss.account_holder) state.store.account_holder = ss.account_holder;
+        if (ss.primary_color) {
+          state.color = ss.primary_color;
+          applyAppTheme(state.color, state.theme || 'light');
+        }
+      }
 
       if (pRes.data) {
         PRODUCTS = pRes.data.map(p => ({
@@ -3741,6 +3777,7 @@
     let currentReceiptLogoImage = state.store.receiptLogoImage || '';
     let currentReceiptFooterType = state.store.receiptFooterType === 'qr' ? 'image' : (state.store.receiptFooterType || 'image');
     let currentReceiptFooterImage = state.store.receiptFooterImage || '';
+    let currentQrPaymentImage = state.store.qr_image_url || '';
     let currentHighlights = JSON.parse(JSON.stringify(state.store.highlights || DEFAULT_STORE_CONFIG.highlights));
     let currentPaymentAccounts = JSON.parse(JSON.stringify(state.store.payment_accounts || DEFAULT_STORE_CONFIG.payment_accounts));
 
@@ -4247,7 +4284,33 @@
           </div>
         </div>
 
-        <!-- SECTION 9: Payment Accounts Builder (รองรับทั้งรูปภาพโลโก้และอิโมจิ) -->
+        <!-- SECTION 9: PromptPay QR Code Payment (QR สแกนจ่ายเงินหน้าร้าน) -->
+        <div class="card">
+          <div class="card-title">PromptPay QR Code Payment (QR สแกนจ่ายเงินหน้าร้าน)</div>
+          <div class="card-sub">อัปโหลดรูปภาพ QR Code พร้อมเพย์ของร้าน สำหรับให้ลูกค้าสแกนจ่ายเงินในขั้นตอนสั่งซื้อ (Checkout) และบันทึกลงฐานข้อมูลกลาง</div>
+          
+          <div style="background:var(--primary-50); border:1.5px solid var(--border); border-radius:16px; padding:16px; margin-top:12px;">
+            <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+              <div style="width:110px; height:110px; border-radius:14px; overflow:hidden; border:2px dashed var(--border); background:var(--card); display:grid; place-items:center; flex:none;">
+                <img id="qrPaymentImgPreview" src="${escapeHTML(currentQrPaymentImage)}" style="width:100%; height:100%; object-fit:contain; display:${currentQrPaymentImage ? 'block' : 'none'};" onerror="this.style.display='none';" />
+                <span id="qrPaymentImgFallback" style="font-size:12px; display:${currentQrPaymentImage ? 'none' : 'block'}; color:var(--muted); font-weight:700; text-align:center; padding:6px;">ยังไม่มีรูป QR</span>
+              </div>
+              <div style="flex:1; min-width:240px;">
+                <input type="file" id="fileQrPayment" accept="image/*" style="display:none;" />
+                <div class="flex gap-2 items-center" style="margin-bottom:8px;">
+                  <button type="button" class="btn btn-sm btn-primary" id="btnUploadQrPayment" style="font-size:12px; padding:6px 14px; font-weight:700;">📷 อัปโหลดรูป QR Code พร้อมเพย์</button>
+                  <button type="button" class="btn btn-sm btn-ghost" id="btnClearQrPayment" style="font-size:12px; padding:6px 10px; color:var(--danger); display:${currentQrPaymentImage ? 'inline-block' : 'none'};">ลบรูป QR</button>
+                </div>
+                <div class="field" style="margin-bottom:0;">
+                  <label style="font-size:11.5px;">หรือใส่ URL รูปภาพ QR Code</label>
+                  <input class="input" id="setQrPaymentImage" placeholder="https://... หรืออัปโหลดจากปุ่มด้านบน" value="${escapeHTML(currentQrPaymentImage)}" style="font-size:12px; padding:7px 10px;" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION 10: Payment Accounts Builder (รองรับทั้งรูปภาพโลโก้และอิโมจิ) -->
         <div class="card">
           <div class="flex items-center" style="justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
             <div>
@@ -4691,16 +4754,17 @@
         // File upload
         const fileInp = row.querySelector('.acc-file-inp');
         row.querySelector('.btn-acc-upload')?.addEventListener('click', () => fileInp?.click());
-        fileInp?.addEventListener('change', (e) => {
+        fileInp?.addEventListener('change', async (e) => {
           const file = e.target.files[0];
           if (!file) return;
-          const reader = new FileReader();
-          reader.onload = (evt) => {
-            acc.image = evt.target.result;
+          try {
+            const url = await uploadProductImage(file);
+            acc.image = url;
             renderPaymentAccountsList();
             toast(`อัปโหลดโลโก้บัญชี #${idx+1} เรียบร้อย`, 'success');
-          };
-          reader.readAsDataURL(file);
+          } catch (err) {
+            toast('อัปโหลดโลโก้ไม่สำเร็จ: ' + (err.message || err), 'error');
+          }
         });
 
         row.querySelector('.btn-acc-clear')?.addEventListener('click', () => {
@@ -4731,6 +4795,59 @@
     };
 
     renderPaymentAccountsList();
+
+    // PromptPay QR Code Payment Uploader
+    const fileQrPayment = formWrap.querySelector('#fileQrPayment');
+    const btnUploadQrPayment = formWrap.querySelector('#btnUploadQrPayment');
+    const btnClearQrPayment = formWrap.querySelector('#btnClearQrPayment');
+    const qrPaymentImgPreview = formWrap.querySelector('#qrPaymentImgPreview');
+    const qrPaymentImgFallback = formWrap.querySelector('#qrPaymentImgFallback');
+    const qrPaymentUrlInp = formWrap.querySelector('#setQrPaymentImage');
+
+    btnUploadQrPayment?.addEventListener('click', () => fileQrPayment?.click());
+    fileQrPayment?.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      btnUploadQrPayment.disabled = true;
+      btnUploadQrPayment.textContent = 'กำลังอัปโหลด...';
+      try {
+        const publicUrl = await uploadProductImage(file);
+        currentQrPaymentImage = publicUrl;
+        if (qrPaymentImgPreview) {
+          qrPaymentImgPreview.src = currentQrPaymentImage;
+          qrPaymentImgPreview.style.display = 'block';
+        }
+        if (qrPaymentImgFallback) qrPaymentImgFallback.style.display = 'none';
+        if (btnClearQrPayment) btnClearQrPayment.style.display = 'inline-block';
+        if (qrPaymentUrlInp) qrPaymentUrlInp.value = currentQrPaymentImage;
+        toast('อัปโหลดรูป QR Code พร้อมเพย์เรียบร้อย', 'success');
+      } catch (err) {
+        toast('อัปโหลดไม่สำเร็จ: ' + (err.message || err), 'error');
+      } finally {
+        btnUploadQrPayment.disabled = false;
+        btnUploadQrPayment.textContent = '📷 อัปโหลดรูป QR Code พร้อมเพย์';
+      }
+    });
+
+    qrPaymentUrlInp?.addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      currentQrPaymentImage = val;
+      if (qrPaymentImgPreview) {
+        qrPaymentImgPreview.src = val;
+        qrPaymentImgPreview.style.display = val ? 'block' : 'none';
+      }
+      if (qrPaymentImgFallback) qrPaymentImgFallback.style.display = val ? 'none' : 'block';
+      if (btnClearQrPayment) btnClearQrPayment.style.display = val ? 'inline-block' : 'none';
+    });
+
+    btnClearQrPayment?.addEventListener('click', () => {
+      currentQrPaymentImage = '';
+      if (qrPaymentUrlInp) qrPaymentUrlInp.value = '';
+      if (qrPaymentImgPreview) qrPaymentImgPreview.style.display = 'none';
+      if (qrPaymentImgFallback) qrPaymentImgFallback.style.display = 'block';
+      btnClearQrPayment.style.display = 'none';
+      toast('ลบรูป QR Code พร้อมเพย์แล้ว', 'info');
+    });
 
     formWrap.querySelector('#btnAddPaymentAcc')?.addEventListener('click', () => {
       currentPaymentAccounts.push({
@@ -4837,6 +4954,9 @@
       state.store.stickyNotePinColor = formWrap.querySelector('#setStickyPin')?.value || '#EFA6C1';
       applyStickyNoteTheme();
 
+      // Save QR Code Payment Image
+      state.store.qr_image_url = currentQrPaymentImage;
+
       // Save Payment Accounts
       state.store.payment_accounts = currentPaymentAccounts.map(acc => ({
         id: acc.id || Date.now(),
@@ -4887,6 +5007,15 @@
           currency: state.store.currency,
           timezone: state.store.timezone
         }).limit(1).then(() => {}).catch(() => {});
+
+        supabase.from('store_settings').upsert({
+          store_id: '00000000-0000-0000-0000-000000000001',
+          qr_image_url: state.store.qr_image_url || null,
+          bank_name: state.store.bank_name || null,
+          bank_account: state.store.bank_account || null,
+          account_holder: state.store.account_holder || null,
+          primary_color: state.color || '#F8BFD4'
+        }, { onConflict: 'store_id' }).then(() => {}).catch(() => {});
       }
 
       renderMenu();
@@ -5674,7 +5803,7 @@
         }
       } else if (key === 'checkout') {
         const cartEntries = Object.entries(state.selected).map(([id, q]) => {
-          const p = PRODUCTS.find(x => x.id === +id);
+          const p = PRODUCTS.find(x => String(x.id) === String(id));
           return p ? { ...p, qty: q } : null;
         }).filter(Boolean);
         const subtotal = cartEntries.reduce((s, i) => s + i.price * i.qty, 0);
@@ -5712,9 +5841,11 @@
               <div class="card-sub">สแกน QR หรือโอนผ่านบัญชีธนาคาร/วอลเล็ท</div>
               
               <!-- QR Code Preview -->
-              <div class="file-preview" style="aspect-ratio:auto; padding:14px; margin-top:8px; text-align:center;">
-                <div class="qr" style="width:90px; height:90px; margin:0 auto 6px;"></div>
-                <div style="font-size:11.5px; font-weight:700; color:var(--accent-text);">PromptPay QR Code</div>
+              <div class="file-preview" style="aspect-ratio:auto; padding:14px; margin-top:8px; text-align:center; background:var(--card); border:1.5px solid var(--border); border-radius:14px;">
+                ${state.store.qr_image_url
+                  ? `<img src="${escapeHTML(state.store.qr_image_url)}" alt="PromptPay QR" style="width:140px; height:140px; object-fit:contain; border-radius:10px; margin:0 auto 6px; display:block; box-shadow:var(--shadow-soft);" onerror="this.style.display='none';" />`
+                  : `<div class="qr" style="width:90px; height:90px; margin:0 auto 6px;"></div>`}
+                <div style="font-size:12px; font-weight:800; color:var(--accent-text);">PromptPay QR Code (สแกนจ่ายเงิน)</div>
               </div>
 
               <!-- Bank & Wallet Transfer Details with Copy Buttons (Dynamic List from Settings) -->
