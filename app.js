@@ -270,6 +270,17 @@
     }
   } catch (e) {}
 
+  let initialDeviceId = '';
+  try {
+    initialDeviceId = sessionStorage.getItem('haypos_device_id');
+    if (!initialDeviceId) {
+      initialDeviceId = 'dev_' + Math.random().toString(36).substring(2, 8) + Date.now().toString(36).slice(-3);
+      sessionStorage.setItem('haypos_device_id', initialDeviceId);
+    }
+  } catch (e) {
+    initialDeviceId = 'dev_' + Math.random().toString(36).substring(2, 8);
+  }
+
   const state = {
     isAdmin: false,       // Default to false: Visitor mode
     page: 'store',        // Default page: Customer Store
@@ -286,6 +297,8 @@
     clearedNotifProductIds: new Set(),
     recentOrderNotifs: [],
     clearedOrderNotifIds: new Set(),
+    deviceId: initialDeviceId,
+    liveOnlineUsers: [],
     store: loadedStore
   };
 
@@ -808,6 +821,97 @@
     }
   }
 
+  let presenceChannel = null;
+
+  function getDeviceType() {
+    const ua = navigator.userAgent || '';
+    if (/iPad|Tablet/i.test(ua)) return '📱 Tablet (POS)';
+    if (/Mobi|Android|iPhone/i.test(ua)) return '📱 Smartphone (มือถือ)';
+    return '💻 Desktop PC (คอมพิวเตอร์)';
+  }
+
+  function updatePresencePayload() {
+    if (!presenceChannel || !supabase) return;
+    try {
+      const payload = {
+        device_id: state.deviceId,
+        user_id: state.user?.id || ('guest_' + state.deviceId),
+        name: state.user?.full_name || (state.isAdmin ? 'Admin (แอดมิน)' : 'ลูกค้าหน้าร้าน (Store Visitor)'),
+        email: state.user?.email || (state.isAdmin ? 'admin@bnchaymate.com' : 'Guest Store Visitor'),
+        role: state.isAdmin ? (state.user?.role || 'Store Owner (เจ้าของร้าน)') : 'Customer (ลูกค้าออนไลน์)',
+        device: getDeviceType(),
+        page: state.page || 'store',
+        online_at: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+        isAdmin: !!state.isAdmin
+      };
+      presenceChannel.track(payload);
+    } catch (e) {
+      console.warn('Failed to track presence payload:', e);
+    }
+  }
+
+  function setupRealtimePresence() {
+    if (!supabase) return;
+    try {
+      if (presenceChannel) {
+        supabase.removeChannel(presenceChannel);
+        presenceChannel = null;
+      }
+
+      presenceChannel = supabase.channel('online_presence_room', {
+        config: {
+          presence: { key: state.deviceId }
+        }
+      });
+
+      presenceChannel
+        .on('presence', { event: 'sync' }, () => {
+          const presenceState = presenceChannel.presenceState();
+          const userList = [];
+          Object.entries(presenceState).forEach(([key, presences]) => {
+            if (Array.isArray(presences) && presences.length > 0) {
+              const p = presences[presences.length - 1];
+              userList.push({
+                ...p,
+                key,
+                isCurrent: key === state.deviceId
+              });
+            }
+          });
+
+          // If current device not found in sync, ensure it is added locally
+          if (!userList.some(u => u.isCurrent)) {
+            userList.unshift({
+              device_id: state.deviceId,
+              name: state.user?.full_name || (state.isAdmin ? 'Admin (แอดมิน)' : 'ลูกค้าหน้าร้าน (Store Visitor)'),
+              email: state.user?.email || (state.isAdmin ? 'admin@bnchaymate.com' : 'Guest Store Visitor'),
+              role: state.isAdmin ? (state.user?.role || 'Store Owner') : 'Customer (ลูกค้าออนไลน์)',
+              device: getDeviceType(),
+              online_at: 'กำลังใช้งานอยู่ (Active Now)',
+              isCurrent: true,
+              isAdmin: !!state.isAdmin
+            });
+          }
+
+          state.liveOnlineUsers = userList;
+          renderLiveUsersList();
+        })
+        .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+          console.log('Realtime presence user joined:', key, newPresences);
+        })
+        .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+          console.log('Realtime presence user left:', key, leftPresences);
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            updatePresencePayload();
+          }
+        });
+    } catch (err) {
+      console.warn('Realtime presence init error:', err);
+    }
+  }
+
   async function checkAuthSession() {
     if (!supabase) return;
     try {
@@ -1151,6 +1255,7 @@
     renderMenu();
     renderPage();
     updateStockNotifications();
+    updatePresencePayload();
   }
 
   function lockToVisitorMode() {
@@ -1172,6 +1277,7 @@
     renderMenu();
     renderPage();
     updateStockNotifications();
+    updatePresencePayload();
     toast('Returned to Customer Storefront', 'info');
   }
 
@@ -1428,6 +1534,61 @@
     updateStockNotifications();
   }
 
+  function renderLiveUsersList() {
+    const listEl = document.getElementById('liveUsersListContainer');
+    const countEl = document.getElementById('liveUsersCount');
+    if (!listEl) return;
+
+    let users = (state.liveOnlineUsers || []).filter(u => u && u.name);
+
+    if (users.length === 0) {
+      users = [{
+        device_id: state.deviceId,
+        name: state.user?.full_name || (state.isAdmin ? 'Admin' : 'Guest Customer'),
+        email: state.user?.email || (state.isAdmin ? 'admin@bnchaymate.com' : 'Guest Store Visitor'),
+        role: state.isAdmin ? (state.user?.role || 'Store Owner') : 'Customer (ลูกค้าออนไลน์)',
+        device: getDeviceType(),
+        online_at: 'กำลังใช้งานอยู่ (Active Now)',
+        isCurrent: true,
+        isAdmin: !!state.isAdmin
+      }];
+    }
+
+    if (countEl) countEl.textContent = `${users.length} Sessions Online`;
+
+    listEl.innerHTML = users.map(u => {
+      const name = u.name || 'User';
+      const initial = name.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase() || 'U';
+      const isCurrent = u.device_id === state.deviceId || u.isCurrent;
+      return `
+        <div class="user-status-card ${isCurrent ? 'current' : ''}">
+          <div style="width:42px; height:42px; border-radius:12px; background:var(--primary); color:#fff; display:grid; place-items:center; font-weight:800; font-size:14px; flex:none; box-shadow:var(--shadow-soft);">
+            ${escapeHTML(initial)}
+          </div>
+          <div style="flex:1; min-width:0;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+              <strong style="font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text);">${escapeHTML(name)}</strong>
+              <span class="badge ${isCurrent ? 'success' : (u.isAdmin ? 'warning' : 'info')}" style="font-size:10px; padding:1px 6px;">
+                ${isCurrent ? 'อุปกรณ์ปัจจุบัน (This Device)' : (u.isAdmin ? '⚡ แอดมินออนไลน์' : '🛒 ลูกค้าออนไลน์')}
+              </span>
+            </div>
+            <div style="font-size:11.5px; color:var(--accent-text); font-weight:600;">
+              ${escapeHTML(u.role || 'Visitor')} · <span style="color:var(--muted); font-weight:400;">${escapeHTML(u.email || '')}</span>
+            </div>
+            <div style="font-size:11px; color:var(--muted); margin-top:2px; display:flex; align-items:center; gap:4px;">
+              <span style="display:inline-flex; align-items:center; gap:3px;">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="12" x="3" y="4" rx="2"/><line x1="2" x2="22" y1="20" y2="20"/></svg>
+                <span>${escapeHTML(u.device || 'Web Browser')}</span>
+              </span>
+              <span>·</span>
+              <span style="color:#3F8E63; font-weight:600;">${isCurrent ? 'Active Now' : `เชื่อมต่อ ${escapeHTML(u.online_at || 'just now')}`}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
   const PAGES = {};
 
   // ============================================================
@@ -1467,92 +1628,43 @@
       </div>`)));
     root.appendChild(statsGrid);
 
-    // Live Active Users & Admin Status Card
-    const adminUser = state.user || { full_name: 'Mira P.', email: 'admin@bnchaymate.com', role: 'Store Owner' };
-    const adminInitial = adminUser.full_name.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase() || 'AD';
-
-    const activeSessions = [
-      {
-        name: adminUser.full_name,
-        email: adminUser.email || 'admin@bnchaymate.com',
-        role: adminUser.role || 'Store Owner',
-        avatar: adminInitial,
-        device: 'Current Device · ' + (navigator.userAgent.includes('Mobile') || navigator.userAgent.includes('iPad') ? 'Tablet/Mobile' : 'Desktop Browser'),
-        time: 'Active Now (กำลังใช้งานอยู่)',
-        isCurrent: true,
-        type: 'admin'
-      },
-      {
-        name: 'Staff Cashier #1',
-        email: 'pos_frontdesk@bnchaymate.com',
-        role: 'Cashier Staff',
-        avatar: 'ST',
-        device: 'POS Counter Tablet #1 · Storefront',
-        time: 'Active 2m ago (ออนไลน์)',
-        isCurrent: false,
-        type: 'staff'
-      },
-      {
-        name: 'Online Guest Customer',
-        email: 'Guest Visitor',
-        role: 'Customer Storefront',
-        avatar: 'GC',
-        device: 'Online Customer · Browsing Menu / Cart',
-        time: 'Active just now (กำลังเลือกซื้อ)',
-        isCurrent: false,
-        type: 'customer'
-      }
-    ];
-
+    // Live Active Users & Admin Status Card (100% Real-Time Supabase Presence)
     const liveUsersCard = el(`
       <div class="card" style="margin-top:18px;">
         <div class="flex items-center" style="justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
           <div>
             <div class="card-title" style="display:flex; align-items:center; gap:8px;">
               <span class="online-dot"></span>
-              <span>Live Users &amp; Admin Status (สถานะผู้ใช้งาน &amp; แอดมินออนไลน์)</span>
+              <span>Live Users &amp; Admin Status (สถานะผู้ใช้งาน &amp; แอดมินออนไลน์จริง)</span>
             </div>
-            <div class="card-sub">ตรวจดูผู้ดูแลระบบ พนักงาน และลูกค้าที่กำลังเปิดใช้งานระบบอยู่ในขณะนี้แบบ Real-time</div>
+            <div class="card-sub">ตรวจดูผู้ดูแลระบบ พนักงาน และลูกค้าที่กำลังเปิดใช้งานระบบอยู่ในขณะนี้แบบ Real-time จริงข้ามเครื่อง</div>
           </div>
           <div class="flex items-center gap-2">
             <span class="badge success" style="font-size:11px; padding:3px 8px; font-weight:700; display:inline-flex; align-items:center; gap:4px;">
               <span class="online-dot" style="margin:0;"></span>
-              <span>${activeSessions.length} Sessions Online</span>
+              <span id="liveUsersCount">${state.liveOnlineUsers && state.liveOnlineUsers.length > 0 ? state.liveOnlineUsers.length : 1} Sessions Online</span>
             </span>
             <button type="button" class="btn btn-sm" id="btnRefreshOnline" style="font-size:12px; font-weight:700; background:var(--primary-50); color:var(--accent-text); border:1px solid var(--border); display:inline-flex; align-items:center; gap:4px;">
               <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-              <span>Refresh</span>
+              <span>Sync Presence</span>
             </button>
           </div>
         </div>
 
-        <div class="active-users-list">
-          ${activeSessions.map(u => `
-            <div class="user-status-card ${u.isCurrent ? 'current' : ''}">
-              <div style="width:42px; height:42px; border-radius:12px; background:var(--primary); color:#fff; display:grid; place-items:center; font-weight:800; font-size:14px; flex:none; box-shadow:var(--shadow-soft);">
-                ${escapeHTML(u.avatar)}
-              </div>
-              <div style="flex:1; min-width:0;">
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
-                  <strong style="font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text);">${escapeHTML(u.name)}</strong>
-                  <span class="badge ${u.isCurrent ? 'success' : 'info'}" style="font-size:10px; padding:1px 6px;">${u.isCurrent ? 'อุปกรณ์ปัจจุบัน' : 'Online'}</span>
-                </div>
-                <div style="font-size:11.5px; color:var(--accent-text); font-weight:600;">${escapeHTML(u.role)} · <span style="color:var(--muted); font-weight:400;">${escapeHTML(u.email)}</span></div>
-                <div style="font-size:11px; color:var(--muted); margin-top:2px; display:flex; align-items:center; gap:4px;">
-                  <span style="display:inline-flex; align-items:center; gap:3px;">
-                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="12" x="3" y="4" rx="2"/><line x1="2" x2="22" y1="20" y2="20"/></svg>
-                    <span>${escapeHTML(u.device)}</span>
-                  </span>
-                  <span>·</span>
-                  <span style="color:#3F8E63; font-weight:600;">${escapeHTML(u.time)}</span>
-                </div>
-              </div>
-            </div>
-          `).join('')}
+        <div class="active-users-list" id="liveUsersListContainer">
+          <!-- Populated dynamically by renderLiveUsersList() -->
         </div>
       </div>
     `);
     root.appendChild(liveUsersCard);
+
+    liveUsersCard.querySelector('#btnRefreshOnline')?.addEventListener('click', () => {
+      updatePresencePayload();
+      toast('ส่งสัญญาณตรวจเช็กสถานะผู้ใช้งานข้ามอุปกรณ์ (Realtime Presence) แล้ว', 'success');
+      renderLiveUsersList();
+    });
+
+    setTimeout(() => renderLiveUsersList(), 20);
 
     liveUsersCard.querySelector('#btnRefreshOnline')?.addEventListener('click', () => {
       toast('ซิงก์สถานะผู้ใช้งานออนไลน์ล่าสุดแล้ว', 'success');
@@ -6358,6 +6470,7 @@
     checkAuthSession();
     loadSupabaseData();
     setupRealtimeSubscriptions();
+    setupRealtimePresence();
   }
 
   if (document.readyState === 'loading') {
