@@ -535,16 +535,15 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
 }
 .product-tile.out{opacity:.4}
 .product-tile .qty-badge{
-  position:absolute; top:3px; right:3px;
-  min-width:18px; height:18px;
-  padding: 0 4px;
-  border-radius: 6px;
+  position:absolute; top:4px; right:4px;
+  width:22px; height:22px;
+  border-radius: 50%;
   background: var(--primary-600);
   color:#fff;
-  font-size:10.5px; font-weight:800;
+  font-size:11px; font-weight:800;
   display:none; align-items:center; justify-content:center;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-  border: 1.5px solid var(--card);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  border: 2px solid #ffffff;
   z-index: 10;
   pointer-events: none;
 }
@@ -557,6 +556,36 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
 }
 .product-tile.low .stock-dot{background: var(--warning)}
 .product-tile.out .stock-dot{background: var(--danger)}
+
+/* Floating Cart Button */
+.floating-cart-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--primary-600);
+  color: #ffffff;
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.28), var(--shadow);
+  padding: 12px 22px;
+  border-radius: 50px;
+  font-size: 14px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  z-index: 95;
+  transition: all .2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: floatPopIn .25s ease;
+}
+.floating-cart-btn:hover {
+  transform: translateY(-3px) scale(1.03);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+@keyframes floatPopIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 /* Categories grid */
 .cat-grid{

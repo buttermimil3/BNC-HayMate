@@ -1627,6 +1627,10 @@
   function renderPage() {
     const page = $('#page');
     if (!page) return;
+    if (state.page !== 'store') {
+      const floatBtn = document.getElementById('storeFloatingCartBtn');
+      if (floatBtn) floatBtn.remove();
+    }
     page.innerHTML = '';
     const fn = PAGES[state.page];
     if (fn) fn(page);
@@ -2613,9 +2617,9 @@
         previewImg.style.display = 'block';
         previewEmoji.style.display = 'none';
         urlInp.value = currentImage;
-        toast('อัปโหลดรูปภาพสินค้าเรียบร้อย', 'success');
+        toast('อัปโหลดรูปภาพสินค้าเรียบร้อย ✨', 'success');
       } catch (err) {
-        toast('อัปโหลดไม่สำเร็จ: ' + (err.message || 'กรุณาเข้าสู่ระบบด้วย Email/Password'), 'error');
+        toast('อัปโหลดไม่สำเร็จ: ' + (err.message || err), 'error');
       } finally {
         triggerBtn.disabled = false;
         triggerBtn.textContent = 'อัปโหลดรูปภาพ';
@@ -2624,11 +2628,14 @@
 
     urlInp.addEventListener('input', (e) => {
       const val = e.target.value.trim();
-      if (val && (val.startsWith('http') || val.startsWith('data:image'))) {
-        currentImage = val;
+      currentImage = val;
+      if (val) {
         previewImg.src = val;
         previewImg.style.display = 'block';
         previewEmoji.style.display = 'none';
+      } else {
+        previewImg.style.display = 'none';
+        previewEmoji.style.display = 'grid';
       }
     });
 
@@ -2677,7 +2684,7 @@
           const stock = Number($('#pStock')?.value || 50);
           const flavor = $('#pFlavor')?.value.trim() || '';
           const status = stock === 0 ? 'out' : stock < 10 ? 'low' : 'active';
-          const image = (currentImage && !currentImage.startsWith('(Uploaded')) ? currentImage : (urlInp?.value && urlInp.value !== '(Uploaded Photo)' && urlInp.value.startsWith('http') ? urlInp.value : currentImage);
+          const image = (urlInp?.value && urlInp.value.trim() && urlInp.value !== '(Uploaded Photo)') ? urlInp.value.trim() : (currentImage || '');
 
           if (existing) {
             existing.name = name;
@@ -5384,8 +5391,42 @@
     const view = el(`<div id="storeView"></div>`);
     root.appendChild(view);
 
+    function updateFloatingCartBtn() {
+      let floatBtn = document.getElementById('storeFloatingCartBtn');
+      const totalQty = Object.values(state.selected).reduce((a, b) => a + Number(b || 0), 0);
+      const totalPrice = Object.entries(state.selected).reduce((sum, [id, q]) => {
+        const p = PRODUCTS.find(x => String(x.id) === String(id));
+        return sum + (p ? Number(p.price) * Number(q) : 0);
+      }, 0);
+
+      // Only show floating button on Store page when there are selected items
+      if (totalQty > 0 && state.page === 'store') {
+        if (!floatBtn) {
+          floatBtn = el(`
+            <button type="button" id="storeFloatingCartBtn" class="floating-cart-btn" title="ดูตะกร้าสินค้า">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
+              <span id="floatCartText">ตะกร้าสินค้า (${totalQty} ชิ้น · ${money(totalPrice)}) →</span>
+            </button>
+          `);
+          floatBtn.addEventListener('click', () => {
+            root.querySelectorAll('#storeTabs .tab').forEach(x => x.classList.remove('active'));
+            root.querySelector('#storeTabs [data-s="cart"]')?.classList.add('active');
+            drawStore('cart');
+          });
+          document.body.appendChild(floatBtn);
+        } else {
+          const txt = floatBtn.querySelector('#floatCartText');
+          if (txt) txt.textContent = `ตะกร้าสินค้า (${totalQty} ชิ้น · ${money(totalPrice)}) →`;
+          floatBtn.style.display = 'flex';
+        }
+      } else {
+        if (floatBtn) floatBtn.style.display = 'none';
+      }
+    }
+
     const drawStore = (key) => {
       view.innerHTML = '';
+      updateFloatingCartBtn();
       if (key === 'home') {
         // 1. Carousel Container (Dynamic Slides, 1:1 Aspect Ratio at Top)
         const carouselEl = el(`
@@ -5512,14 +5553,37 @@
           <div class="card" style="margin-top:16px">
             <div class="card-title">${escapeHTML(state.store.popularTitle || 'Popular Picks')}</div>
             <div class="card-sub">${escapeHTML(state.store.popularSub || 'Best sellers this week')}</div>
-            <div class="product-grid">
-              ${PRODUCTS.slice(0, 16).map(p => `
-                <div class="product-tile" title="${escapeHTML(p.name)} · ${money(p.price)}" onclick="state.selected[${p.id}] = (state.selected[${p.id}] || 0) + 1; toast('Added ' + '${p.name}', 'success');">
+            <div class="product-grid" id="homePopularGrid">
+              ${PRODUCTS.slice(0, 16).map(p => {
+                const qty = state.selected[p.id] || 0;
+                return `
+                <div class="product-tile ${qty ? 'selected' : ''}" data-id="${p.id}" title="${escapeHTML(p.name)} · ${money(p.price)}">
                   ${p.image ? `<img src="${escapeHTML(p.image)}" alt="${escapeHTML(p.name)}" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='grid';" /><span style="display:none">${p.emoji || '🍰'}</span>` : `${p.emoji || '🍰'}`}
-                </div>`).join('')}
+                  <span class="qty-badge">${qty}</span>
+                </div>`;
+              }).join('')}
             </div>
           </div>
         `));
+
+        // Attach listeners for Home popular picks
+        view.querySelectorAll('#homePopularGrid .product-tile').forEach(tile => {
+          const pid = tile.dataset.id;
+          const p = PRODUCTS.find(x => String(x.id) === String(pid));
+          if (!p) return;
+          tile.addEventListener('click', () => {
+            if (p.stock === 0) return toast(`${p.name} is out of stock`, 'error');
+            state.selected[p.id] = (state.selected[p.id] || 0) + 1;
+            tile.classList.add('selected');
+            const badge = tile.querySelector('.qty-badge');
+            if (badge) {
+              badge.textContent = state.selected[p.id];
+              badge.style.animation = 'none'; void badge.offsetWidth; badge.style.animation = '';
+            }
+            toast(`เพิ่ม ${p.name} ลงในตะกร้าแล้ว`, 'success');
+            updateFloatingCartBtn();
+          });
+        });
 
         // 4. Customer Reviews & Ratings (Fourth Section on Home)
         const sortedHomeReviews = [...REVIEWS].sort((a, b) => {
@@ -5610,10 +5674,10 @@
         let page = 1;
 
         function updateCartInfo() {
-          const totalQty = Object.values(state.selected).reduce((a,b)=>a+b, 0);
+          const totalQty = Object.values(state.selected).reduce((a,b)=>a+Number(b||0), 0);
           const totalPrice = Object.entries(state.selected).reduce((sum, [id, q]) => {
-            const p = PRODUCTS.find(x => x.id === +id);
-            return sum + (p ? p.price * q : 0);
+            const p = PRODUCTS.find(x => String(x.id) === String(id));
+            return sum + (p ? p.price * Number(q) : 0);
           }, 0);
           cartInfo.innerHTML = totalQty
             ? `Cart: <strong style="color:var(--text)">${totalQty}</strong> items · <strong style="color:var(--accent-text)">${money(totalPrice)}</strong> (Go to Cart →)`
@@ -5621,7 +5685,7 @@
         }
         cartInfo.addEventListener('click', () => {
           root.querySelectorAll('#storeTabs .tab').forEach(x => x.classList.remove('active'));
-          root.querySelector('#storeTabs [data-s="cart"]').classList.add('active');
+          root.querySelector('#storeTabs [data-s="cart"]')?.classList.add('active');
           drawStore('cart');
         });
 
@@ -5659,6 +5723,7 @@
               badge.textContent = state.selected[p.id];
               badge.style.animation = 'none'; void badge.offsetWidth; badge.style.animation = '';
               updateCartInfo();
+              updateFloatingCartBtn();
             });
             tile.addEventListener('contextmenu', (e) => {
               e.preventDefault();
@@ -5671,6 +5736,7 @@
                 tile.querySelector('.qty-badge').textContent = state.selected[p.id];
               }
               updateCartInfo();
+              updateFloatingCartBtn();
             });
             grid.appendChild(tile);
           });
@@ -5694,7 +5760,7 @@
 
       } else if (key === 'cart') {
         const cartEntries = Object.entries(state.selected).map(([id, q]) => {
-          const p = PRODUCTS.find(x => x.id === +id);
+          const p = PRODUCTS.find(x => String(x.id) === String(id));
           return p ? { ...p, qty: q } : null;
         }).filter(Boolean);
 
@@ -5703,7 +5769,7 @@
         const total = Math.max(0, subtotal - discount);
         const activePromos = PROMOTIONS.filter(p => p.status === 'active');
 
-        view.appendChild(el(`
+        const cartWrap = el(`
           <div class="grid two-col">
             <div>
               <div class="card">
@@ -5720,9 +5786,9 @@
                           ${thumbHtml}
                           <div style="flex:1"><div style="font-weight:600">${escapeHTML(p.name)}</div><div style="font-size:12px; color:var(--muted)">${p.cat} · ${money(p.price)}</div></div>
                           <div class="flex items-center gap-2">
-                            <button class="btn btn-sm" onclick="state.selected[${p.id}]--; if (state.selected[${p.id}]<=0) delete state.selected[${p.id}]; drawStore('cart');">−</button>
+                            <button class="btn btn-sm btn-cart-minus" data-id="${p.id}">−</button>
                             <span style="font-weight:600">${p.qty}</span>
-                            <button class="btn btn-sm" onclick="state.selected[${p.id}]++; drawStore('cart');">+</button>
+                            <button class="btn btn-sm btn-cart-plus" data-id="${p.id}">+</button>
                           </div>
                           <div style="font-weight:700; width:70px; text-align:right">${money(p.price * p.qty)}</div>
                         </div>`;
@@ -5781,12 +5847,34 @@
               <button class="btn btn-primary btn-block mt-3" id="goCheckout" ${cartEntries.length === 0 ? 'disabled style="opacity:.5;cursor:not-allowed"' : ''}>Proceed to Checkout</button>
             </div>
           </div>
-        `));
+        `);
+        view.appendChild(cartWrap);
+
+        // Cart item plus / minus event listeners
+        cartWrap.querySelectorAll('.btn-cart-minus').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const pid = btn.dataset.id;
+            if (state.selected[pid]) {
+              state.selected[pid]--;
+              if (state.selected[pid] <= 0) delete state.selected[pid];
+              drawStore('cart');
+              updateFloatingCartBtn();
+            }
+          });
+        });
+        cartWrap.querySelectorAll('.btn-cart-plus').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const pid = btn.dataset.id;
+            state.selected[pid] = (state.selected[pid] || 0) + 1;
+            drawStore('cart');
+            updateFloatingCartBtn();
+          });
+        });
 
         // Promo handlers in cart
-        const promoInput = view.querySelector('#cartPromoInput');
-        const btnApply = view.querySelector('#btnApplyPromo');
-        const btnRemove = view.querySelector('#btnRemovePromo');
+        const promoInput = cartWrap.querySelector('#cartPromoInput');
+        const btnApply = cartWrap.querySelector('#btnApplyPromo');
+        const btnRemove = cartWrap.querySelector('#btnRemovePromo');
 
         const doApplyPromoCode = (rawCode) => {
           const code = (rawCode || '').trim().toUpperCase();
@@ -5819,7 +5907,7 @@
           drawStore('cart');
         });
 
-        view.querySelectorAll('.btn-promo-tag').forEach(tag => {
+        cartWrap.querySelectorAll('.btn-promo-tag').forEach(tag => {
           tag.addEventListener('click', () => {
             if (promoInput) promoInput.value = tag.dataset.code;
             doApplyPromoCode(tag.dataset.code);
@@ -5827,7 +5915,7 @@
         });
 
         if (cartEntries.length) {
-          view.querySelector('#goCheckout').addEventListener('click', () => {
+          cartWrap.querySelector('#goCheckout').addEventListener('click', () => {
             root.querySelectorAll('#storeTabs .tab').forEach(x => x.classList.remove('active'));
             root.querySelector('#storeTabs [data-s="checkout"]').classList.add('active');
             drawStore('checkout');
