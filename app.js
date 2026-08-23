@@ -1358,6 +1358,14 @@
   async function checkAuthSession() {
     if (!supabase) return;
     try {
+      // Check if this browser has an active logged-in Admin session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data: profile } = await supabase.from('profiles').select('*').eq('user_id', session.user.id).single();
+        const userName = profile?.full_name || session.user.user_metadata?.full_name || 'Admin';
+        unlockAdminMode({ full_name: userName, email: session.user.email, role: profile?.role || 'Store Owner' });
+      }
+
       supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' && session?.user) {
           const { data: profile } = await supabase.from('profiles').select('*').eq('user_id', session.user.id).single();
@@ -2069,10 +2077,11 @@
     root.querySelector('#dashReports').addEventListener('click', () => { state.page = 'reports'; renderMenu(); renderPage(); });
 
     const totalRev = ORDERS.reduce((s, o) => s + (o.status !== 'cancelled' ? Number(o.total || 0) : 0), 0);
+    const aggCount = (typeof getAggregatedCustomers === 'function') ? getAggregatedCustomers().length : CUSTOMERS.length;
     const stats = [
       { label: "Today's Sales", value: money(totalRev), delta: ORDERS.length > 0 ? '+12.4%' : '0%', icon: ICONS.revenue },
       { label: 'Total Orders', value: String(ORDERS.length), delta: ORDERS.length > 0 ? '+5.1%' : '0 orders', icon: ICONS.orders },
-      { label: 'Customers', value: String(CUSTOMERS.length), delta: CUSTOMERS.length > 0 ? `+${CUSTOMERS.length} total` : '0 registered', icon: ICONS.customers },
+      { label: 'Customers', value: String(aggCount), delta: aggCount > 0 ? `+${aggCount} total` : '0 registered', icon: ICONS.customers },
       { label: 'Best Seller', value: ORDERS.length > 0 ? 'Rose Latte' : '-', delta: ORDERS.length > 0 ? '68 sold today' : 'No sales yet', icon: ICONS.orders },
     ];
     const statsGrid = el(`<div class="grid stats"></div>`);
@@ -3838,12 +3847,124 @@
   };
 
   // ============================================================
+  // Customer Aggregation Helper (Group repeat customers by Farm Tag)
+  // ============================================================
+  function getAggregatedCustomers() {
+    const customerMap = new Map();
+
+    // 1. Group all orders by Farm Tag (primary) or Farm Name / Customer Name
+    ORDERS.forEach(o => {
+      const tagKey = (o.farm_tag || '').trim().toLowerCase();
+      const farmKey = (o.farm_name || '').trim().toLowerCase();
+      const nameKey = (o.customer || '').trim().toLowerCase();
+
+      // Grouping key: prefer farm_tag, then farm_name, fallback: customer name
+      const groupKey = tagKey ? `tag:${tagKey}` : (farmKey ? `farm:${farmKey}` : `name:${nameKey}`);
+      if (!groupKey || groupKey === 'name:') return;
+
+      if (!customerMap.has(groupKey)) {
+        customerMap.set(groupKey, {
+          key: groupKey,
+          name: o.customer || 'Customer',
+          farm_name: o.farm_name || '',
+          farm_tag: o.farm_tag || '',
+          contact: o.contact || '',
+          email: (o.contact && o.contact.includes('@')) ? o.contact : `${(o.customer || 'customer').toLowerCase().replace(/\s+/g, '')}@customer.com`,
+          phone: (o.contact && !o.contact.includes('@')) ? o.contact : '',
+          ordersCount: 0,
+          totalSpend: 0,
+          totalItems: 0,
+          tag: 'New',
+          ordersList: [],
+          itemFrequency: {}
+        });
+      }
+
+      const c = customerMap.get(groupKey);
+      if (o.customer && (!c.name || c.name === 'Customer')) c.name = o.customer;
+      if (o.farm_name && !c.farm_name) c.farm_name = o.farm_name;
+      if (o.farm_tag && !c.farm_tag) c.farm_tag = o.farm_tag;
+      if (o.contact && !c.contact) {
+        c.contact = o.contact;
+        if (o.contact.includes('@')) c.email = o.contact;
+        else c.phone = o.contact;
+      }
+
+      c.ordersCount += 1;
+      const orderTotal = Number(o.total || 0);
+      c.totalSpend += orderTotal;
+      c.totalItems += Number(o.items || (o.items_data ? o.items_data.reduce((s, it) => s + (it.qty || 1), 0) : 1));
+
+      // Append order to customer's history list
+      c.ordersList.push(o);
+
+      // Track purchased items for Favorite item calculation
+      if (Array.isArray(o.items_data)) {
+        o.items_data.forEach(it => {
+          const itName = it.name || 'Product';
+          const qty = Number(it.qty || 1);
+          c.itemFrequency[itName] = (c.itemFrequency[itName] || 0) + qty;
+        });
+      }
+    });
+
+    // 2. Also incorporate any pre-registered customers in CUSTOMERS array
+    CUSTOMERS.forEach(cust => {
+      const tagKey = (cust.tag && !['VIP', 'Regular', 'New'].includes(cust.tag) ? cust.tag : cust.address || '').trim().toLowerCase();
+      const nameKey = (cust.name || '').trim().toLowerCase();
+      const groupKey = tagKey ? `tag:${tagKey}` : `name:${nameKey}`;
+
+      if (!customerMap.has(groupKey)) {
+        customerMap.set(groupKey, {
+          key: groupKey,
+          name: cust.name,
+          farm_name: cust.address || '',
+          farm_tag: (cust.tag && !['VIP', 'Regular', 'New'].includes(cust.tag)) ? cust.tag : '',
+          contact: cust.phone || cust.email || '',
+          email: cust.email || `${cust.name.toLowerCase().replace(/\s+/g, '')}@customer.com`,
+          phone: cust.phone || '',
+          ordersCount: cust.orders || 1,
+          totalSpend: Number(cust.spend || 0),
+          totalItems: cust.orders || 1,
+          tag: (cust.tag && ['VIP', 'Regular', 'New'].includes(cust.tag)) ? cust.tag : 'New',
+          ordersList: [],
+          itemFrequency: {}
+        });
+      }
+    });
+
+    // 3. Process tags, sorting and favorite product
+    return Array.from(customerMap.values()).map(c => {
+      if (c.ordersCount >= 5 || c.totalSpend >= 500) c.tag = 'VIP';
+      else if (c.ordersCount >= 2 || c.totalSpend >= 100) c.tag = 'Regular';
+      else c.tag = 'New';
+
+      let maxQty = 0;
+      let favName = '-';
+      Object.entries(c.itemFrequency).forEach(([name, count]) => {
+        if (count > maxQty) {
+          maxQty = count;
+          favName = name;
+        }
+      });
+      c.favoriteItem = favName !== '-' ? `${favName} (${maxQty} ชิ้น)` : (PRODUCTS[0]?.name || '-');
+      c.ordersList.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+      return c;
+    });
+  }
+
+  // ============================================================
   // PAGE 6: Customers
   // ============================================================
   PAGES.customers = (root) => {
+    const aggCustomers = getAggregatedCustomers();
+
     root.appendChild(el(`
       <div class="page-head">
-        <div><h1 class="page-title">Customers</h1><div class="page-sub">Your loyal customer base</div></div>
+        <div>
+          <h1 class="page-title">Customers</h1>
+          <div class="page-sub">Your loyal customer base (${aggCustomers.length} profiles)</div>
+        </div>
         <button class="btn btn-primary" id="btnAddCustomer">+ Add Customer</button>
       </div>
     `));
@@ -3853,18 +3974,22 @@
       body: `
         <div class="grid" style="gap:12px">
           <div class="field"><label>Customer Name</label><input class="input" id="newCustName" placeholder="e.g. Lisa M."/></div>
-          <div class="field"><label>Email Address</label><input class="input" id="newCustEmail" placeholder="lisa@example.com"/></div>
-          <div class="field"><label>Customer Tag</label><select class="select" id="newCustTag"><option>VIP</option><option>Regular</option><option>New</option></select></div>
+          <div class="field"><label>Farm / Tag</label><input class="input" id="newCustTagInput" placeholder="e.g. #FARM-01 หรือ Green Farm"/></div>
+          <div class="field"><label>Contact (Phone/Email)</label><input class="input" id="newCustEmail" placeholder="e.g. 081-234-5678"/></div>
+          <div class="field"><label>Customer Tier</label><select class="select" id="newCustTier"><option>New</option><option>Regular</option><option>VIP</option></select></div>
         </div>`,
       actions: [
         { label: 'Cancel', kind: 'ghost' },
         { label: 'Add Customer', kind: 'primary', onClick: async () => {
           const name = $('#newCustName')?.value.trim() || 'New Customer';
-          const email = $('#newCustEmail')?.value.trim() || 'customer@bnchaymate.com';
-          const tag = $('#newCustTag')?.value || 'New';
-          CUSTOMERS.unshift({ name, email, orders: 1, spend: 25.00, tag });
-          if (supabase) await supabase.from('customers').insert({ name, email, tag });
-          toast('Customer added', 'success');
+          const farmTag = $('#newCustTagInput')?.value.trim() || '';
+          const contact = $('#newCustEmail')?.value.trim() || '';
+          const tier = $('#newCustTier')?.value || 'New';
+          const email = (contact && contact.includes('@')) ? contact : `${name.toLowerCase().replace(/\s+/g, '')}@customer.com`;
+          const phone = (contact && !contact.includes('@')) ? contact : '';
+          CUSTOMERS.unshift({ name, email, phone, address: farmTag, orders: 1, spend: 0, tag: tier });
+          if (supabase) await supabase.from('customers').insert({ name, email, phone, address: farmTag, tag: tier });
+          toast('เพิ่มข้อมูลลูกค้าเรียบร้อยแล้ว', 'success');
           renderPage();
         }}
       ]
@@ -3874,58 +3999,183 @@
       <div class="card" style="padding:0">
         <div class="table-wrap">
           <table class="data">
-            <thead><tr><th>Customer</th><th>Orders</th><th>Total Spend</th><th>Tag</th><th></th></tr></thead>
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th>Contact</th>
+                <th>Visits</th>
+                <th>Total Spend</th>
+                <th>Tag</th>
+                <th style="text-align:right;">Action</th>
+              </tr>
+            </thead>
             <tbody>
-              ${CUSTOMERS.map(c => `
-                <tr data-name="${escapeHTML(c.name)}" style="cursor:pointer;">
-                  <td><div class="flex items-center gap-3">
-                    <div class="avatar" style="width:36px;height:36px;border-radius:10px">${c.name.split(' ').map(s => s[0]).slice(0,2).join('')}</div>
-                    <div><div style="font-weight:600">${escapeHTML(c.name)}</div><div style="font-size:12px; color:var(--muted)">${escapeHTML(c.email)}</div></div>
-                  </div></td>
-                  <td>${c.orders}</td>
-                  <td>${money(c.spend)}</td>
+              ${aggCustomers.length ? aggCustomers.map(c => `
+                <tr data-key="${escapeHTML(c.key)}" style="cursor:pointer;">
+                  <td>
+                    <div class="flex items-center gap-3">
+                      <div class="avatar" style="width:38px; height:38px; border-radius:10px; font-size:13px; font-weight:800; flex:none;">
+                        ${escapeHTML((c.name || 'C').slice(0, 2).toUpperCase())}
+                      </div>
+                      <div style="min-width:0;">
+                        <div style="font-weight:700; font-size:13.5px; color:var(--text);">${escapeHTML(c.name)}</div>
+                        ${(c.farm_tag || c.farm_name) ? `
+                          <div style="font-size:11px; color:var(--muted); margin-top:2px; display:inline-flex; align-items:center; gap:4px;">
+                            <span style="background:var(--primary-50); padding:1px 6px; border-radius:6px; border:1px solid var(--border); font-weight:600; color:var(--accent-text);">${escapeHTML(c.farm_tag || c.farm_name)}</span>
+                            <button type="button" class="btn btn-sm btn-ghost btn-copy-cust-tag-row" data-tag="${escapeHTML(c.farm_tag || c.farm_name)}" title="คัดลอกแท็กฟาร์ม" style="padding:2px 5px; border-radius:5px; border:1px solid var(--border); display:inline-flex; align-items:center; cursor:pointer;">
+                              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                            </button>
+                          </div>
+                        ` : ''}
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div style="font-size:13px; font-weight:600; color:var(--text);">${escapeHTML(c.phone || c.contact || c.email || '-')}</div>
+                    ${c.phone && c.email && !c.email.includes('@customer.com') ? `<div style="font-size:11px; color:var(--muted);">${escapeHTML(c.email)}</div>` : ''}
+                  </td>
+                  <td>
+                    <span class="badge ${c.ordersCount > 1 ? 'info' : ''}" style="font-weight:700;">${c.ordersCount} visits</span>
+                  </td>
+                  <td><strong style="font-size:14px; color:var(--accent-text);">${money(c.totalSpend)}</strong></td>
                   <td><span class="badge ${c.tag === 'VIP' ? '' : c.tag === 'Regular' ? 'info' : 'success'}">${c.tag}</span></td>
-                  <td style="text-align:right"><button class="btn btn-sm">View</button></td>
-                </tr>`).join('')}
+                  <td style="text-align:right; white-space:nowrap;">
+                    <button class="btn btn-sm btn-view-cust" data-key="${escapeHTML(c.key)}">View</button>
+                  </td>
+                </tr>`).join('') : `<tr><td colspan="6"><div class="empty"><div class="icon">${ICONS.customers}</div>No customer records found.</div></td></tr>`}
             </tbody>
           </table>
         </div>
       </div>
     `);
+
     root.appendChild(listCard);
-    listCard.querySelectorAll('tbody tr').forEach(tr => tr.addEventListener('click', () => openCustomerModal(tr.dataset.name)));
+
+    listCard.querySelectorAll('tbody tr').forEach(tr => {
+      tr.addEventListener('click', (e) => {
+        if (e.target.closest('.btn-copy-cust-tag-row')) return;
+        openCustomerModal(tr.dataset.key);
+      });
+    });
+
+    listCard.querySelectorAll('.btn-copy-cust-tag-row').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tag = btn.dataset.tag || '';
+        const doCopy = () => {
+          btn.innerHTML = `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#3F8E63" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+          setTimeout(() => {
+            btn.innerHTML = `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
+          }, 1800);
+          toast(`คัดลอกแท็กฟาร์ม "${tag}" เรียบร้อยแล้ว`, 'success');
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(tag).then(doCopy).catch(doCopy);
+        } else {
+          doCopy();
+        }
+      });
+    });
   };
 
-  function openCustomerModal(name) {
-    const c = CUSTOMERS.find(x => x.name === name);
+  function openCustomerModal(keyOrName) {
+    const aggCustomers = getAggregatedCustomers();
+    const c = aggCustomers.find(x => x.key === keyOrName || x.name.toLowerCase() === String(keyOrName).toLowerCase() || (x.farm_tag && x.farm_tag.toLowerCase() === String(keyOrName).toLowerCase()));
     if (!c) return;
+
+    const farmInfo = [c.farm_name, c.farm_tag].filter(Boolean).join(' · ') || c.farm_tag || c.farm_name || '-';
+
     const body = el(`
       <div>
+        <!-- Profile Header -->
         <div class="flex items-center gap-3 mb-3">
-          <div class="avatar" style="width:52px;height:52px;border-radius:14px;font-size:16px">${c.name.split(' ').map(s => s[0]).slice(0,2).join('')}</div>
-          <div><div style="font-weight:800; font-size:16px">${escapeHTML(c.name)}</div><div style="color:var(--muted); font-size:12.5px">${escapeHTML(c.email)}</div></div>
-          <span class="badge ${c.tag === 'VIP' ? '' : c.tag === 'Regular' ? 'info' : 'success'}" style="margin-left:auto">${c.tag}</span>
+          <div class="avatar" style="width:52px; height:52px; border-radius:14px; font-size:16px; font-weight:800;">
+            ${escapeHTML((c.name || 'C').slice(0, 2).toUpperCase())}
+          </div>
+          <div>
+            <div style="font-weight:800; font-size:16px; color:var(--text);">${escapeHTML(c.name)}</div>
+            <div style="color:var(--muted); font-size:12.5px;">${escapeHTML(c.phone || c.contact || c.email)}</div>
+          </div>
+          <span class="badge ${c.tag === 'VIP' ? '' : c.tag === 'Regular' ? 'info' : 'success'}" style="margin-left:auto; font-weight:700;">${c.tag}</span>
         </div>
 
-        <div class="card" style="margin-bottom:12px; padding:10px 14px; background:var(--primary-50); border:1px solid var(--border); border-radius:12px;">
-          <div class="kv" style="margin:0;"><span class="k">Farm / Tag</span><span class="v" style="display:flex; align-items:center; gap:6px;"><strong>${escapeHTML(c.address || c.tag || '-')}</strong> ${(c.address || c.tag) ? `
-            <button type="button" class="btn btn-sm btn-ghost btn-copy-cust-tag" data-tag="${escapeHTML(c.address || c.tag)}" style="font-size:11.5px; padding:3px 10px; border:1px solid var(--border); border-radius:8px; display:inline-flex; align-items:center; gap:5px; font-weight:700; color:var(--accent-text); cursor:pointer;">
-              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-              <span>Copy Tag</span>
-            </button>
-          ` : ''}</span></div>
-          ${c.phone ? `<div class="kv" style="margin-top:6px;"><span class="k">Phone</span><span class="v">${escapeHTML(c.phone)}</span></div>` : ''}
+        <!-- Farm Tag Bar -->
+        <div class="card" style="margin-bottom:14px; padding:10px 14px; background:var(--primary-50); border:1px solid var(--border); border-radius:12px;">
+          <div class="kv" style="margin:0; border:none; padding:0;">
+            <span class="k" style="font-weight:600;">Farm / Tag</span>
+            <span class="v" style="display:flex; align-items:center; gap:6px;">
+              <strong style="color:var(--text);">${escapeHTML(farmInfo)}</strong>
+              ${(c.farm_tag || c.farm_name) ? `
+                <button type="button" class="btn btn-sm btn-ghost btn-copy-cust-tag" data-tag="${escapeHTML(c.farm_tag || c.farm_name)}" style="font-size:11.5px; padding:3px 10px; border:1px solid var(--border); border-radius:8px; display:inline-flex; align-items:center; gap:5px; font-weight:700; color:var(--accent-text); cursor:pointer;">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                  <span>Copy Tag</span>
+                </button>
+              ` : ''}
+            </span>
+          </div>
         </div>
 
-        <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px">
-          <div class="card stat" style="padding:14px"><span class="label">Total Orders</span><span class="value" style="font-size:20px">${c.orders}</span></div>
-          <div class="card stat" style="padding:14px"><span class="label">Total Spending</span><span class="value" style="font-size:20px">${money(c.spend)}</span></div>
+        <!-- Order History List Panel -->
+        <div style="margin-bottom:14px;">
+          <div class="flex items-center" style="justify-content:space-between; margin-bottom:8px;">
+            <div style="font-weight:700; font-size:14px; color:var(--text); display:flex; align-items:center; gap:6px;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+              <span>Order History (ประวัติการสั่งซื้อ ${c.ordersList.length} ครั้ง)</span>
+            </div>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:8px; max-height:220px; overflow-y:auto; padding-right:2px;">
+            ${c.ordersList.length ? c.ordersList.map(o => {
+              const itemsListStr = Array.isArray(o.items_data) && o.items_data.length 
+                ? o.items_data.map(it => `${escapeHTML(it.name)} x${it.qty}`).join(', ') 
+                : `${o.items || 1} items`;
+              return `
+                <div style="padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--card); display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                  <div style="min-width:0; flex:1;">
+                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                      <strong style="font-size:13px; color:var(--text);">#${escapeHTML(o.id)}</strong>
+                      <span style="font-size:11.5px; color:var(--muted);">· ${escapeHTML(o.date)}</span>
+                      <span class="badge ${STATUS[o.status]?.cls || ''}" style="font-size:10px; padding:1px 6px;">${STATUS[o.status]?.label || o.status}</span>
+                    </div>
+                    <div style="font-size:11.5px; color:var(--muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                      ${itemsListStr}
+                    </div>
+                  </div>
+                  <div style="font-weight:800; font-size:13.5px; color:var(--accent-text); flex:none;">
+                    ${money(o.total)}
+                  </div>
+                </div>
+              `;
+            }).join('') : `
+              <div style="text-align:center; padding:16px; color:var(--muted); font-size:12.5px; background:var(--primary-50); border:1px dashed var(--border); border-radius:10px;">
+                ไม่มีประวัติออเดอร์ในระบบ
+              </div>
+            `}
+          </div>
         </div>
-        <div class="card-title mb-2">Favorite Products</div>
-        <div class="flex gap-2 mb-3" style="flex-wrap:wrap">
-          ${PRODUCTS.slice(0, 4).map(p => `<span class="badge">${p.emoji} ${escapeHTML(p.name)}</span>`).join('')}
+
+        <!-- Summary Section at the Bottom -->
+        <div class="card" style="padding:14px; background:var(--primary-50); border:1px solid var(--border); border-radius:14px; margin-bottom:6px;">
+          <div style="font-size:12px; font-weight:700; color:var(--accent-text); margin-bottom:10px; text-transform:uppercase; letter-spacing:0.5px;">
+            สรุปภาพรวมลูกค้า (Customer Summary)
+          </div>
+          <div class="grid" style="grid-template-columns: repeat(3, 1fr); gap:10px;">
+            <div style="background:var(--card); padding:10px; border-radius:10px; border:1px solid var(--border); text-align:center;">
+              <div style="font-size:11px; color:var(--muted); font-weight:600;">ยอดจ่ายทั้งหมด</div>
+              <div style="font-size:15px; font-weight:800; color:var(--accent-text); margin-top:2px;">${money(c.totalSpend)}</div>
+            </div>
+            <div style="background:var(--card); padding:10px; border-radius:10px; border:1px solid var(--border); text-align:center;">
+              <div style="font-size:11px; color:var(--muted); font-weight:600;">จำนวนครั้งที่ซื้อ</div>
+              <div style="font-size:15px; font-weight:800; color:var(--text); margin-top:2px;">${c.ordersCount} ครั้ง</div>
+            </div>
+            <div style="background:var(--card); padding:10px; border-radius:10px; border:1px solid var(--border); text-align:center;">
+              <div style="font-size:11px; color:var(--muted); font-weight:600;">ออเดอร์ที่ชอบที่สุด</div>
+              <div style="font-size:11.5px; font-weight:700; color:var(--primary-600); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHTML(c.favoriteItem)}">
+                ${escapeHTML(c.favoriteItem)}
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="field"><label>Customer notes</label><textarea class="textarea" id="custNotesArea" placeholder="Prefers oat milk, regular takeaway..."></textarea></div>
       </div>
     `);
 
@@ -3956,7 +4206,11 @@
       });
     });
 
-    openModal({ title: 'Customer Profile', body, actions: [{ label: 'Close', kind: 'ghost' }, { label: 'Save Notes', kind: 'primary', onClick: () => toast('Customer notes saved', 'success') }] });
+    openModal({
+      title: 'Customer Profile',
+      body,
+      actions: [{ label: 'Close', kind: 'ghost' }]
+    });
   }
 
   function openWriteReviewModal(order) {
@@ -7828,7 +8082,7 @@
     // Also wait for Supabase data (if still in flight after animation)
     await dataPromise;
 
-    // Ensure initial load is always the Customer Storefront
+    // If not logged in as Admin, ensure Customer Storefront is displayed
     if (!state.isAdmin) {
       state.page = 'store';
     }
