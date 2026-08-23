@@ -1048,6 +1048,21 @@
             }
           }
         })
+        .on('broadcast', { event: 'stock_deducted' }, ({ payload }) => {
+          console.log('Realtime broadcast stock_deducted received:', payload);
+          if (payload && Array.isArray(payload.items)) {
+            payload.items.forEach(it => {
+              const p = PRODUCTS.find(x => String(x.id) === String(it.id));
+              if (p) {
+                p.stock = Math.max(0, Number(p.stock || 0) - Number(it.qty || 1));
+              }
+            });
+            updateStockNotifications();
+            if (['products', 'stock', 'store', 'dashboard'].includes(state.page)) {
+              renderPage();
+            }
+          }
+        })
         .on('broadcast', { event: 'product_deleted' }, ({ payload }) => {
           console.log('Realtime broadcast product_deleted received:', payload);
           if (payload && payload.id) {
@@ -2186,19 +2201,41 @@
         </div>
         <div class="card">
           <div class="flex items-center" style="justify-content:space-between; margin-bottom:10px">
-            <div><div class="card-title">Low Stock</div><div class="card-sub">Items to restock</div></div>
-            <button class="btn btn-sm" data-go="stock">Manage</button>
+            <div><div class="card-title">Low Stock Alert</div><div class="card-sub">Items needing attention</div></div>
+            <button class="btn btn-sm" data-go="stock">Manage Stock</button>
           </div>
           <div style="display:flex; flex-direction:column; gap:10px">
-            ${PRODUCTS.filter(p => p.stock < 10).slice(0,4).map(p => `
-              <div class="flex items-center gap-3" style="padding:10px; border:1px solid var(--border); border-radius:12px">
-                <div style="width:40px;height:40px;display:grid;place-items:center;font-size:22px;border-radius:10px;background:var(--primary-50)">${p.emoji}</div>
-                <div style="flex:1">
-                  <div style="font-weight:600; font-size:13.5px">${escapeHTML(p.name)}</div>
-                  <div style="font-size:12px; color:var(--muted)">${escapeHTML(p.cat)}</div>
-                </div>
-                <span class="badge ${p.stock === 0 ? 'danger' : 'warn'}">${p.stock} left</span>
-              </div>`).join('')}
+            ${(() => {
+              const lowThreshold = Number(state.store && state.store.stockLowThreshold !== undefined ? state.store.stockLowThreshold : 10);
+              const lowItems = PRODUCTS.filter(p => Number(p.stock || 0) <= lowThreshold);
+              if (lowItems.length === 0) {
+                return `
+                  <div style="text-align:center; padding:22px 14px; background:var(--primary-50); border:1px dashed var(--border); border-radius:14px;">
+                    <div style="width:36px; height:36px; border-radius:10px; background:rgba(124,197,154,0.2); color:#3F8E63; display:grid; place-items:center; margin:0 auto 8px;">
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                    </div>
+                    <div style="font-weight:700; font-size:13.5px; color:var(--text);">All Stock Levels Healthy</div>
+                    <div style="font-size:11.5px; color:var(--muted); margin-top:2px;">สินค้าทุกรายการมีสต็อกเพียงพอ (${PRODUCTS.length} รายการ)</div>
+                  </div>
+                `;
+              }
+              return lowItems.slice(0, 4).map(p => {
+                const imgUrl = p.image || DEFAULT_PRODUCT_IMG;
+                const statusInfo = getStockStatusInfo(p.stock);
+                return `
+                  <div class="flex items-center gap-3" style="padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--card);">
+                    <div style="width:38px; height:38px; border-radius:10px; overflow:hidden; background:var(--primary-50); border:1px solid var(--border); flex:none;">
+                      <img src="${escapeHTML(imgUrl)}" alt="${escapeHTML(p.name)}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='${DEFAULT_PRODUCT_IMG}';" />
+                    </div>
+                    <div style="flex:1; min-width:0;">
+                      <div style="font-weight:700; font-size:13.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHTML(p.name)}</div>
+                      <div style="font-size:11.5px; color:var(--muted);">${escapeHTML(p.cat || 'General')}</div>
+                    </div>
+                    <span class="${statusInfo.badgeClass}" style="flex:none; font-weight:700;">${p.stock} left</span>
+                  </div>
+                `;
+              }).join('');
+            })()}
           </div>
         </div>
       </div>
@@ -2432,7 +2469,7 @@
                 <td><strong>${escapeHTML(o.id)}</strong></td>
                 <td>
                   <div style="font-weight:700;">${escapeHTML(o.customer)}</div>
-                  ${(o.farm_tag || o.farm_name) ? `<div style="font-size:11px; color:var(--muted); margin-top:2px; display:inline-flex; align-items:center; gap:4px;"><span style="background:var(--primary-50); padding:1px 6px; border-radius:6px; border:1px solid var(--border);">${escapeHTML(o.farm_tag || o.farm_name)}</span><button type="button" class="btn btn-sm btn-ghost btn-copy-tag-quick" data-tag="${escapeHTML(o.farm_tag || o.farm_name)}" title="คัดลอกแท็กฟาร์ม" style="padding:1px 5px; font-size:10px; border-radius:4px; border:1px solid var(--border); cursor:pointer;">📋</button></div>` : ''}
+                  ${(o.farm_tag || o.farm_name) ? `<div style="font-size:11px; color:var(--muted); margin-top:2px; display:inline-flex; align-items:center; gap:4px;"><span style="background:var(--primary-50); padding:1px 6px; border-radius:6px; border:1px solid var(--border);">${escapeHTML(o.farm_tag || o.farm_name)}</span><button type="button" class="btn btn-sm btn-ghost btn-copy-tag-quick" data-tag="${escapeHTML(o.farm_tag || o.farm_name)}" title="คัดลอกแท็กฟาร์ม" style="padding:2px 5px; border-radius:5px; border:1px solid var(--border); display:inline-flex; align-items:center; cursor:pointer;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></button></div>` : ''}
                 </td>
                 <td>${o.date}</td>
                 <td>${o.items || (o.items_data ? o.items_data.length : 1)}</td>
@@ -2440,7 +2477,9 @@
                 <td><span class="badge ${STATUS[o.status]?.cls || ''}"><span class="b-dot"></span>${STATUS[o.status]?.label || o.status}</span></td>
                 <td style="text-align:right; white-space:nowrap;">
                   <button class="btn btn-sm btn-view-single" data-id="${o.id}">View</button>
-                  <button class="btn btn-sm btn-danger btn-delete-single" data-id="${o.id}" title="ลบออเดอร์นี้" style="padding:4px 8px; margin-left:4px;">🗑️</button>
+                  <button class="btn btn-sm btn-danger btn-delete-single" data-id="${o.id}" title="ลบออเดอร์นี้" style="padding:5px 8px; margin-left:4px; display:inline-flex; align-items:center; justify-content:center;">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                  </button>
                 </td>
               </tr>`).join('') : `<tr><td colspan="7"><div class="empty"><div class="icon">${ICONS.search}</div>No orders match your filters.</div></td></tr>`}
           </tbody>
@@ -2462,8 +2501,10 @@
           e.stopPropagation();
           const tag = btn.dataset.tag || '';
           const doCopy = () => {
-            btn.textContent = '✓';
-            setTimeout(() => { btn.textContent = '📋'; }, 1800);
+            btn.innerHTML = `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#3F8E63" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+            setTimeout(() => {
+              btn.innerHTML = `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
+            }, 1800);
             toast(`คัดลอกแท็กฟาร์ม "${tag}" เรียบร้อยแล้ว`, 'success');
           };
           if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -2920,7 +2961,12 @@
             <span class="k">Farm / Tag</span>
             <span class="v" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
               <strong style="color:var(--text);">${escapeHTML(custAddr)}</strong>
-              ${(o.farm_tag || o.farm_name) ? `<button type="button" class="btn btn-sm btn-ghost btn-copy-farmtag" data-tag="${escapeHTML(o.farm_tag || o.farm_name)}" title="คัดลอกแท็กฟาร์ม" style="font-size:11px; padding:2px 8px; border:1px solid var(--border); border-radius:8px; display:inline-flex; align-items:center; gap:4px; font-weight:700; color:var(--accent-text); cursor:pointer;">📋 Copy Tag</button>` : ''}
+              ${(o.farm_tag || o.farm_name) ? `
+                <button type="button" class="btn btn-sm btn-ghost btn-copy-farmtag" data-tag="${escapeHTML(o.farm_tag || o.farm_name)}" title="คัดลอกแท็กฟาร์ม" style="font-size:11.5px; padding:3px 10px; border:1px solid var(--border); border-radius:8px; display:inline-flex; align-items:center; gap:5px; font-weight:700; color:var(--accent-text); cursor:pointer;">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                  <span>Copy Tag</span>
+                </button>
+              ` : ''}
             </span>
           </div>
         </div>
@@ -2944,14 +2990,18 @@
         e.stopPropagation();
         const tagText = btn.dataset.tag || '';
         const doCopy = () => {
-          btn.textContent = '✓ Copied!';
-          btn.style.color = '#3F8E63';
+          btn.innerHTML = `
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#3F8E63" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            <span style="color:#3F8E63;">Copied!</span>
+          `;
           btn.style.borderColor = '#7CC59A';
           setTimeout(() => {
-            btn.innerHTML = '📋 Copy Tag';
-            btn.style.color = 'var(--accent-text)';
+            btn.innerHTML = `
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+              <span>Copy Tag</span>
+            `;
             btn.style.borderColor = 'var(--border)';
-          }, 2000);
+          }, 1800);
           toast(`คัดลอกแท็กฟาร์ม "${tagText}" เรียบร้อยแล้ว`, 'success');
         };
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -3858,7 +3908,12 @@
         </div>
 
         <div class="card" style="margin-bottom:12px; padding:10px 14px; background:var(--primary-50); border:1px solid var(--border); border-radius:12px;">
-          <div class="kv" style="margin:0;"><span class="k">Farm / Tag</span><span class="v" style="display:flex; align-items:center; gap:6px;"><strong>${escapeHTML(c.address || c.tag || '-')}</strong> ${(c.address || c.tag) ? `<button type="button" class="btn btn-sm btn-ghost btn-copy-cust-tag" data-tag="${escapeHTML(c.address || c.tag)}" style="font-size:11px; padding:2px 8px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">📋 Copy Tag</button>` : ''}</span></div>
+          <div class="kv" style="margin:0;"><span class="k">Farm / Tag</span><span class="v" style="display:flex; align-items:center; gap:6px;"><strong>${escapeHTML(c.address || c.tag || '-')}</strong> ${(c.address || c.tag) ? `
+            <button type="button" class="btn btn-sm btn-ghost btn-copy-cust-tag" data-tag="${escapeHTML(c.address || c.tag)}" style="font-size:11.5px; padding:3px 10px; border:1px solid var(--border); border-radius:8px; display:inline-flex; align-items:center; gap:5px; font-weight:700; color:var(--accent-text); cursor:pointer;">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+              <span>Copy Tag</span>
+            </button>
+          ` : ''}</span></div>
           ${c.phone ? `<div class="kv" style="margin-top:6px;"><span class="k">Phone</span><span class="v">${escapeHTML(c.phone)}</span></div>` : ''}
         </div>
 
@@ -3879,8 +3934,18 @@
         e.stopPropagation();
         const tag = btn.dataset.tag || '';
         const doCopy = () => {
-          btn.textContent = '✓ Copied!';
-          setTimeout(() => { btn.innerHTML = '📋 Copy Tag'; }, 1800);
+          btn.innerHTML = `
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#3F8E63" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            <span style="color:#3F8E63;">Copied!</span>
+          `;
+          btn.style.borderColor = '#7CC59A';
+          setTimeout(() => {
+            btn.innerHTML = `
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+              <span>Copy Tag</span>
+            `;
+            btn.style.borderColor = 'var(--border)';
+          }, 1800);
           toast(`คัดลอกแท็กฟาร์ม "${tag}" เรียบร้อยแล้ว`, 'success');
         };
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -6953,9 +7018,42 @@
             }
           }
 
+          // 3. Deduct stock for all purchased items locally and update Supabase products
+          selectedItemsList.forEach(it => {
+            const p = PRODUCTS.find(x => String(x.id) === String(it.id));
+            if (p) {
+              p.stock = Math.max(0, Number(p.stock || 0) - Number(it.qty || 1));
+            }
+          });
+          updateStockNotifications();
+
+          if (supabase) {
+            try {
+              for (const it of selectedItemsList) {
+                const p = PRODUCTS.find(x => String(x.id) === String(it.id));
+                if (p && !String(p.id).startsWith('prod_') && p.id.length === 36) {
+                  await supabase.from('products').update({ stock: p.stock }).eq('id', p.id);
+                }
+              }
+            } catch (stkErr) {
+              console.warn('Supabase stock update notice:', stkErr);
+            }
+          }
+
+          // 4. Real-time broadcast stock deduction to all other connected devices
+          if (syncChannel) {
+            try {
+              syncChannel.send({
+                type: 'broadcast',
+                event: 'stock_deducted',
+                payload: { items: selectedItemsList.map(it => ({ id: it.id, qty: it.qty })) }
+              });
+            } catch (e) {}
+          }
+
           state.selected = {};
           updateFloatingCartBtn();
-          toast('สั่งซื้อและแนบสลิปสำเร็จเรียบร้อย', 'success');
+          toast('สั่งซื้อและตัดสต็อกสินค้าสำเร็จเรียบร้อย', 'success');
           root.querySelectorAll('#storeTabs .tab').forEach(x => x.classList.remove('active'));
           root.querySelector('#storeTabs [data-s="receipt"]').classList.add('active');
           drawStore('receipt');
