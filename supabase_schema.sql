@@ -249,28 +249,28 @@ CREATE POLICY "cust_upd" ON customers FOR UPDATE USING (store_id = get_my_store_
 CREATE POLICY "cust_del" ON customers FOR DELETE USING (store_id = get_my_store_id() AND get_my_role() IN ('owner','admin'));
 
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "ord_sel" ON orders FOR SELECT USING (store_id = get_my_store_id());
-CREATE POLICY "ord_ins" ON orders FOR INSERT WITH CHECK (store_id = get_my_store_id());
-CREATE POLICY "ord_upd" ON orders FOR UPDATE USING (store_id = get_my_store_id() AND get_my_role() IN ('owner','admin'));
-CREATE POLICY "ord_del" ON orders FOR DELETE USING (store_id = get_my_store_id() AND get_my_role() IN ('owner','admin'));
+CREATE POLICY "ord_sel" ON orders FOR SELECT USING (true);
+CREATE POLICY "ord_ins" ON orders FOR INSERT WITH CHECK (true);
+CREATE POLICY "ord_upd" ON orders FOR UPDATE USING (true);
+CREATE POLICY "ord_del" ON orders FOR DELETE USING (true);
 
 ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "oi_sel" ON order_items FOR SELECT USING (EXISTS (SELECT 1 FROM orders WHERE orders.id = order_items.order_id AND orders.store_id = get_my_store_id()));
-CREATE POLICY "oi_ins" ON order_items FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM orders WHERE orders.id = order_items.order_id AND orders.store_id = get_my_store_id()));
-CREATE POLICY "oi_upd" ON order_items FOR UPDATE USING (EXISTS (SELECT 1 FROM orders WHERE orders.id = order_items.order_id AND orders.store_id = get_my_store_id()) AND get_my_role() IN ('owner','admin'));
-CREATE POLICY "oi_del" ON order_items FOR DELETE USING (EXISTS (SELECT 1 FROM orders WHERE orders.id = order_items.order_id AND orders.store_id = get_my_store_id()) AND get_my_role() IN ('owner','admin'));
+CREATE POLICY "oi_sel" ON order_items FOR SELECT USING (true);
+CREATE POLICY "oi_ins" ON order_items FOR INSERT WITH CHECK (true);
+CREATE POLICY "oi_upd" ON order_items FOR UPDATE USING (true);
+CREATE POLICY "oi_del" ON order_items FOR DELETE USING (true);
 
 ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "rev_sel" ON reviews FOR SELECT USING (store_id = get_my_store_id());
-CREATE POLICY "rev_ins" ON reviews FOR INSERT WITH CHECK (store_id = get_my_store_id());
-CREATE POLICY "rev_upd" ON reviews FOR UPDATE USING (store_id = get_my_store_id() AND get_my_role() IN ('owner','admin'));
-CREATE POLICY "rev_del" ON reviews FOR DELETE USING (store_id = get_my_store_id() AND get_my_role() IN ('owner','admin'));
+CREATE POLICY "rev_sel" ON reviews FOR SELECT USING (true);
+CREATE POLICY "rev_ins" ON reviews FOR INSERT WITH CHECK (true);
+CREATE POLICY "rev_upd" ON reviews FOR UPDATE USING (true);
+CREATE POLICY "rev_del" ON reviews FOR DELETE USING (true);
 
 ALTER TABLE promotions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "promo_sel" ON promotions FOR SELECT USING (store_id = get_my_store_id());
-CREATE POLICY "promo_ins" ON promotions FOR INSERT WITH CHECK (store_id = get_my_store_id());
-CREATE POLICY "promo_upd" ON promotions FOR UPDATE USING (store_id = get_my_store_id() AND get_my_role() IN ('owner','admin'));
-CREATE POLICY "promo_del" ON promotions FOR DELETE USING (store_id = get_my_store_id() AND get_my_role() IN ('owner','admin'));
+CREATE POLICY "promo_sel" ON promotions FOR SELECT USING (true);
+CREATE POLICY "promo_ins" ON promotions FOR INSERT WITH CHECK (true);
+CREATE POLICY "promo_upd" ON promotions FOR UPDATE USING (true);
+CREATE POLICY "promo_del" ON promotions FOR DELETE USING (true);
 
 ALTER TABLE stock_movements ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "sm_sel" ON stock_movements FOR SELECT USING (store_id = get_my_store_id());

@@ -164,9 +164,16 @@
   ];
 
   let ORDERS = [];
-  // ORDERS are loaded from Supabase on init — localStorage is NOT the source of truth
+  try {
+    const cachedOrders = JSON.parse(localStorage.getItem('haypos_orders') || '[]');
+    if (Array.isArray(cachedOrders) && cachedOrders.length > 0) ORDERS = cachedOrders;
+  } catch (e) {}
 
-  function persistOrders() { /* no-op: Supabase is the single source of truth */ }
+  function persistOrders() {
+    try {
+      localStorage.setItem('haypos_orders', JSON.stringify(ORDERS.slice(0, 150)));
+    } catch (e) {}
+  }
 
   const STATUS = {
     waiting: { label: 'Waiting Payment', cls: 'warn' },
@@ -329,13 +336,36 @@
     user: null,           // Authenticated user
     pin: '',              // 6-digit PIN buffer
     correctPin: loadedStore.pin || '123456', // Default 6-digit PIN
-    clearedNotifProductIds: new Set(),
-    recentOrderNotifs: [],
-    clearedOrderNotifIds: new Set(),
+    clearedNotifProductIds: (() => {
+      try {
+        const raw = JSON.parse(localStorage.getItem('haypos_cleared_stock_notifs') || '[]');
+        return Array.isArray(raw) ? new Set(raw) : new Set();
+      } catch (e) { return new Set(); }
+    })(),
+    recentOrderNotifs: (() => {
+      try {
+        const raw = JSON.parse(localStorage.getItem('haypos_recent_order_notifs') || '[]');
+        return Array.isArray(raw) ? raw : [];
+      } catch (e) { return []; }
+    })(),
+    clearedOrderNotifIds: (() => {
+      try {
+        const raw = JSON.parse(localStorage.getItem('haypos_cleared_order_notifs') || '[]');
+        return Array.isArray(raw) ? new Set(raw) : new Set();
+      } catch (e) { return new Set(); }
+    })(),
     deviceId: initialDeviceId,
     liveOnlineUsers: [],
     store: loadedStore
   };
+
+  function saveNotifsState() {
+    try {
+      localStorage.setItem('haypos_cleared_order_notifs', JSON.stringify(Array.from(state.clearedOrderNotifIds)));
+      localStorage.setItem('haypos_cleared_stock_notifs', JSON.stringify(Array.from(state.clearedNotifProductIds)));
+      localStorage.setItem('haypos_recent_order_notifs', JSON.stringify((state.recentOrderNotifs || []).slice(0, 50)));
+    } catch (e) {}
+  }
 
   // ============================================================
   // PART 4: Utilities
@@ -414,12 +444,20 @@
       timestamp: Date.now()
     };
     state.clearedOrderNotifIds.delete(order.id);
-    if (!state.recentOrderNotifs.some(x => x.id === notifItem.id)) {
+    if (!state.recentOrderNotifs.some(x => String(x.id) === String(notifItem.id))) {
       state.recentOrderNotifs.unshift(notifItem);
-      if (state.recentOrderNotifs.length > 30) state.recentOrderNotifs.pop();
+      if (state.recentOrderNotifs.length > 50) state.recentOrderNotifs.pop();
     }
+    saveNotifsState();
 
-    toast(`ออเดอร์ใหม่เข้ามา! #${order.id} จากคุณ ${order.customer} (${money(order.total)})`, 'success');
+    // Notify only if Admin is active; Customer sees only their own checkout success toast
+    if (state.isAdmin) {
+      toast(`ออเดอร์ใหม่เข้ามา! #${order.id} จากคุณ ${order.customer} (${money(order.total)})`, 'success');
+      try {
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcHCek3/C4YBobIqPh8bhfGhwjovD3t2AZHCH497hfGhwj+/e3XhocIvz3uF8aHCP797hfGhwj+/e3XhocIvz3uF8aHCP797hf');
+        audio.play().catch(() => {});
+      } catch (e) {}
+    }
     updateStockNotifications();
   }
 
@@ -499,7 +537,7 @@
         if (activeStockAlerts.length > 0) {
           html += `
             <div style="font-size:11.5px; font-weight:800; color:var(--text); padding:4px 2px; margin-top:${activeOrderAlerts.length ? '6px' : '0'}; display:flex; align-items:center; gap:6px;">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--danger);"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--danger);"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" v1="13"/><line x2="12.01" y2="17" y1="17"/></svg>
               <span>สต็อกสินค้าเหลือน้อย (${activeStockAlerts.length})</span>
             </div>
           `;
@@ -546,6 +584,7 @@
             e.stopPropagation();
             const oid = btn.dataset.oid;
             state.clearedOrderNotifIds.add(oid);
+            saveNotifsState();
             updateStockNotifications();
             toast('ลบการแจ้งเตือนออเดอร์นี้แล้ว', 'info');
           });
@@ -566,6 +605,7 @@
             e.stopPropagation();
             const pid = btn.dataset.id;
             state.clearedNotifProductIds.add(pid);
+            saveNotifsState();
             updateStockNotifications();
             toast('ลบการแจ้งเตือนสินค้านี้แล้ว', 'info');
           });
@@ -600,6 +640,7 @@
         const lowProducts = PRODUCTS.filter(p => p.stock < lowThresh);
         lowProducts.forEach(p => state.clearedNotifProductIds.add(p.id));
         (state.recentOrderNotifs || []).forEach(o => state.clearedOrderNotifIds.add(o.id));
+        saveNotifsState();
         updateStockNotifications();
         toast('ล้างการแจ้งเตือนทั้งหมดแล้ว', 'success');
       });
@@ -797,7 +838,27 @@
             slip_url: slipUrl || ''
           };
         });
-        // Not calling persistOrders() — Supabase is the source of truth
+        persistOrders();
+
+        // Populate unread waiting order notifications for offline admin catch-up
+        ORDERS.forEach(ord => {
+          if (ord.status === 'waiting' && !state.clearedOrderNotifIds.has(ord.id)) {
+            const notifItem = {
+              id: ord.id,
+              customer: ord.customer || 'Customer',
+              total: Number(ord.total || 0),
+              items: ord.items || 1,
+              time: ord.date || new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+              timestamp: Date.now()
+            };
+            if (!state.recentOrderNotifs.some(x => String(x.id) === String(ord.id))) {
+              state.recentOrderNotifs.unshift(notifItem);
+            }
+          }
+        });
+        if (state.recentOrderNotifs.length > 50) state.recentOrderNotifs.length = 50;
+        saveNotifsState();
+        updateStockNotifications();
       }
 
       if (cuRes.data) {
@@ -2716,64 +2777,77 @@
   }
 
   function openRestockModal(prodOrId) {
-    const p = typeof prodOrId === 'object' && prodOrId !== null
+    const prod = typeof prodOrId === 'object' && prodOrId !== null
       ? prodOrId
       : PRODUCTS.find(x => String(x.id) === String(prodOrId));
-
-    if (!p) {
+    if (!prod) {
       toast('ไม่พบข้อมูลสินค้า', 'error');
       return;
     }
 
-    const sInfo = getStockStatusInfo(p.stock);
-    const body = el(`
-      <div class="grid" style="gap:14px;">
-        <div style="display:flex; gap:12px; align-items:center; background:var(--primary-50); padding:12px 14px; border-radius:14px; border:1px solid var(--border);">
-          <div style="width:48px; height:48px; border-radius:10px; overflow:hidden; background:var(--card); display:grid; place-items:center; border:1px solid var(--border); flex:none;">
-            <img src="${escapeHTML(p.image || DEFAULT_PRODUCT_IMG)}" alt="${escapeHTML(p.name)}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='${DEFAULT_PRODUCT_IMG}';" />
-          </div>
-          <div style="flex:1; min-width:0;">
-            <div style="font-weight:800; font-size:14px; color:var(--text);">${escapeHTML(p.name)}</div>
-            <div style="font-size:12px; color:var(--muted); margin-top:2px;">
-              หมวดหมู่: <strong>${escapeHTML(p.cat || 'Bakery')}</strong> · คงเหลือปัจจุบัน: <strong style="color:var(--accent-text);">${p.stock}</strong> ชิ้น
+    openModal({
+      title: `ปรับสต็อกสินค้า: ${prod.name}`,
+      body: el(`
+        <div class="grid" style="gap:14px;">
+          <div style="background:var(--primary-50); padding:12px 14px; border-radius:14px; border:1px solid var(--border); display:flex; align-items:center; gap:12px;">
+            <div style="width:48px; height:48px; border-radius:10px; overflow:hidden; background:var(--card); display:grid; place-items:center; border:1px solid var(--border); flex:none;">
+              ${prod.image ? `<img src="${escapeHTML(prod.image)}" alt="${escapeHTML(prod.name)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='block';" /><span style="display:none; font-size:24px;">${prod.emoji || '🍰'}</span>` : `<span style="font-size:24px;">${prod.emoji || '🍰'}</span>`}
+            </div>
+            <div style="flex:1; min-width:0;">
+              <div style="font-weight:800; font-size:14.5px; color:var(--text);">${escapeHTML(prod.name)}</div>
+              <div style="font-size:12px; color:var(--muted); margin-top:2px;">
+                หมวดหมู่: <strong>${escapeHTML(prod.cat || 'Bakery')}</strong> · คงเหลือปัจจุบัน: <strong style="color:var(--accent-text); font-size:13.5px;">${prod.stock}</strong> ชิ้น
+              </div>
             </div>
           </div>
+
+          <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px;">
+            <div class="field" style="margin-bottom:0; min-width:0;">
+              <label style="font-size:12px; font-weight:700;">ประเภทการปรับสต็อก</label>
+              <select class="select" id="restockType" style="border-radius:10px; font-size:13px; width:100%; box-sizing:border-box;">
+                <option value="in" selected>เติมสต็อก (+)</option>
+                <option value="out">เบิกสต็อก / ลด (-)</option>
+                <option value="set">กำหนดจำนวนใหม่</option>
+              </select>
+            </div>
+            <div class="field" style="margin-bottom:0; min-width:0;">
+              <label style="font-size:12px; font-weight:700;">จำนวน</label>
+              <input type="number" id="restockQty" class="input" value="10" min="1" style="border-radius:10px; font-size:14px; font-weight:700; width:100%; box-sizing:border-box;" />
+            </div>
+          </div>
+
+          <div class="field" style="margin-bottom:0; min-width:0;">
+            <label style="font-size:12px; font-weight:700;">หมายเหตุ</label>
+            <input class="input" id="restockNote" placeholder="เช่น เติมสต็อกรอบเช้า, ผลิตเพิ่ม" value="เติมสต็อกสินค้าประจำวัน" style="border-radius:10px; font-size:13px; width:100%; box-sizing:border-box;" />
+          </div>
         </div>
-
-        <div class="field">
-          <label style="font-weight:700; font-size:12.5px;">จำนวนสต็อกใหม่ที่ต้องการปรับ (New Stock Quantity) *</label>
-          <input type="number" id="adjStockInput" class="input" value="${p.stock}" min="0" style="font-size:16px; font-weight:700; text-align:center; padding:10px;" />
-        </div>
-
-        <div style="display:flex; gap:8px; justify-content:center;">
-          <button type="button" class="btn btn-sm btn-quick-add" data-add="10" style="font-size:11.5px; padding:5px 12px;">+10 ชิ้น</button>
-          <button type="button" class="btn btn-sm btn-quick-add" data-add="50" style="font-size:11.5px; padding:5px 12px;">+50 ชิ้น</button>
-          <button type="button" class="btn btn-sm btn-quick-add" data-add="100" style="font-size:11.5px; padding:5px 12px;">+100 ชิ้น</button>
-        </div>
-      </div>
-    `);
-
-    body.querySelectorAll('.btn-quick-add').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const inp = body.querySelector('#adjStockInput');
-        if (inp) inp.value = Math.max(0, Number(inp.value || 0) + Number(btn.dataset.add));
-      });
-    });
-
-    openModal({
-      title: `เติมสต็อกสินค้า (Restock: ${p.name})`,
-      body,
+      `),
       actions: [
         { label: 'Cancel', kind: 'ghost' },
-        { label: 'Save Stock (บันทึกสต็อก)', kind: 'primary', onClick: async () => {
-          const val = Number($('#adjStockInput')?.value || 0);
-          p.stock = val;
-          p.status = val === 0 ? 'out' : val < 10 ? 'low' : 'active';
+        { label: 'บันทึกสต็อก', kind: 'primary', onClick: async () => {
+          const type = $('#restockType')?.value || 'in';
+          const qty = Number($('#restockQty')?.value || 10);
+
+          const target = PRODUCTS.find(x => String(x.id) === String(prod.id)) || prod;
+          if (type === 'in') {
+            target.stock += qty;
+          } else if (type === 'out') {
+            target.stock = Math.max(0, target.stock - qty);
+          } else if (type === 'set') {
+            target.stock = Math.max(0, qty);
+          }
+
+          target.status = getStockStatusInfo(target.stock).type === 'danger' ? 'out_of_stock' : getStockStatusInfo(target.stock).type === 'warn' ? 'low' : 'active';
+
           if (supabase) {
-            const { error } = await supabase.from('products').update({ stock: val, status: p.status }).eq('id', p.id);
+            const { error } = await supabase.from('products').update({
+              stock: target.stock,
+              status: target.status === 'out_of_stock' ? 'out_of_stock' : 'active'
+            }).eq('id', target.id);
             if (error) { toast('อัปเดตสต็อกไม่สำเร็จ: ' + error.message, 'error'); return; }
           }
-          toast(`อัปเดตสต็อก "${p.name}" เป็น ${val} ชิ้นแล้ว`, 'success');
+
+          toast(`ปรับสต็อกสินค้า "${target.name}" สำเร็จ (สต็อกคงเหลือ: ${target.stock} ชิ้น)`, 'success');
           renderPage();
         }}
       ]
@@ -3236,75 +3310,6 @@
     });
   };
 
-  // Stock Restock Modal Helper
-  function openRestockModal(prod) {
-    if (!prod) return;
-    openModal({
-      title: `Restock — ${prod.name}`,
-      body: el(`
-        <div class="grid" style="gap:14px;">
-          <div style="background:var(--primary-50); padding:12px 14px; border-radius:14px; border:1px solid var(--border); display:flex; align-items:center; gap:12px;">
-            <div style="font-size:32px; width:46px; height:46px; display:grid; place-items:center; background:var(--card); border-radius:12px; border:1px solid var(--border); box-shadow:var(--shadow-soft);">${prod.emoji || ''}</div>
-            <div>
-              <div style="font-weight:800; font-size:14.5px; color:var(--text);">${escapeHTML(prod.name)}</div>
-              <div style="font-size:12px; color:var(--muted); margin-top:2px;">หมวดหมู่: ${escapeHTML(prod.cat || 'General')} · สต็อกปัจจุบัน: <strong style="color:var(--accent-text); font-size:13.5px;">${prod.stock} ชิ้น</strong></div>
-            </div>
-          </div>
-
-          <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px;">
-            <div class="field" style="margin-bottom:0;">
-              <label style="font-size:12px; font-weight:700;">ประเภทการปรับสต็อก (Movement Type)</label>
-              <select class="select" id="restockType" style="border-radius:10px; font-size:13px;">
-                <option value="in" selected>เติมสต็อกสินค้า Incoming (+)</option>
-                <option value="out">เบิกสต็อก / ปรับลด Outgoing (-)</option>
-                <option value="set">ตั้งค่าจำนวนสต็อกใหม่ (Set exact value)</option>
-              </select>
-            </div>
-            <div class="field" style="margin-bottom:0;">
-              <label style="font-size:12px; font-weight:700;">จำนวน (Quantity)</label>
-              <input type="number" id="restockQty" class="input" value="10" min="1" style="border-radius:10px; font-size:14px; font-weight:700;" />
-            </div>
-          </div>
-
-          <div class="field" style="margin-bottom:0;">
-            <label style="font-size:12px;">หมายเหตุ / บันทึก (Reason / Note)</label>
-            <input class="input" id="restockNote" placeholder="เช่น เติมสต็อกรอบเช้า, ผลิตเพิ่ม" value="เติมสต็อกสินค้าประจำวัน" style="border-radius:10px; font-size:13px;" />
-          </div>
-        </div>
-      `),
-      actions: [
-        { label: 'Cancel', kind: 'ghost' },
-        { label: 'บันทึกสต็อก (Confirm Restock)', kind: 'primary', onClick: async () => {
-          const type = $('#restockType')?.value || 'in';
-          const qty = Number($('#restockQty')?.value || 10);
-
-          const target = PRODUCTS.find(x => x.id === prod.id) || prod;
-          if (type === 'in') {
-            target.stock += qty;
-          } else if (type === 'out') {
-            target.stock = Math.max(0, target.stock - qty);
-          } else if (type === 'set') {
-            target.stock = Math.max(0, qty);
-          }
-
-          target.status = getStockStatusInfo(target.stock).type === 'danger' ? 'out_of_stock' : getStockStatusInfo(target.stock).type === 'warn' ? 'low' : 'active';
-
-          if (supabase) {
-            const { error } = await supabase.from('products').update({
-              stock: target.stock,
-              status: target.status === 'out_of_stock' ? 'out_of_stock' : 'active'
-            }).eq('id', target.id);
-            if (error) { toast('อัปเดตสต็อกไม่สำเร็จ: ' + error.message, 'error'); return; }
-          }
-
-          toast(`ปรับสต็อกสินค้า "${target.name}" สำเร็จ (สต็อกคงเหลือ: ${target.stock} ชิ้น)`, 'success');
-          renderPage();
-        }}
-      ]
-    });
-  }
-  window.openProductQuickModal = openRestockModal;
-
   // ============================================================
   // PAGE 5: Stock
   // ============================================================
@@ -3321,18 +3326,18 @@
 
     root.querySelector('#btnStockExport').addEventListener('click', () => toast('Stock export downloaded', 'success'));
     root.querySelector('#btnQuickRestock').addEventListener('click', () => openModal({
-      title: 'Stock Movement (In/Out)',
+      title: 'ปรับสต็อกสินค้า (Stock Movement)',
       body: `
         <div class="grid" style="gap:12px">
-          <div class="field"><label>Select Product</label><select class="select" id="smProd">${PRODUCTS.slice(0, 50).map(p => `<option value="${p.id}">${p.name} (Stock: ${p.stock})</option>`).join('')}</select></div>
+          <div class="field" style="min-width:0;"><label style="font-weight:700;">เลือกสินค้า</label><select class="select" id="smProd" style="width:100%; box-sizing:border-box;">${PRODUCTS.slice(0, 50).map(p => `<option value="${p.id}">${escapeHTML(p.name)} (สต็อก: ${p.stock})</option>`).join('')}</select></div>
           <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px">
-            <div class="field"><label>Movement Type</label><select class="select" id="smType"><option value="in">Incoming (+)</option><option value="out">Outgoing (-)</option></select></div>
-            <div class="field"><label>Quantity</label><input type="number" id="smQty" class="input" value="10"/></div>
+            <div class="field" style="min-width:0;"><label style="font-weight:700;">ประเภทการปรับสต็อก</label><select class="select" id="smType" style="width:100%; box-sizing:border-box;"><option value="in">เติมสต็อก (+)</option><option value="out">เบิกสต็อก (-)</option></select></div>
+            <div class="field" style="min-width:0;"><label style="font-weight:700;">จำนวน</label><input type="number" id="smQty" class="input" value="10" min="1" style="width:100%; box-sizing:border-box;"/></div>
           </div>
         </div>`,
       actions: [
         { label: 'Cancel', kind: 'ghost' },
-        { label: 'Submit Movement', kind: 'primary', onClick: async () => {
+        { label: 'บันทึกสต็อก', kind: 'primary', onClick: async () => {
           const pid = $('#smProd')?.value;
           const type = $('#smType')?.value || 'in';
           const qty = Number($('#smQty')?.value || 10);
@@ -3722,52 +3727,52 @@
     const body = el(`
       <div class="grid" style="gap:14px;">
         <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px;">
-          <div class="field">
-            <label style="font-weight:700;">Promo Code (รหัสโค้ดส่วนลด) *</label>
-            <input class="input" id="pCode" placeholder="เช่น SUMMER20, VIP100" value="${existing ? escapeHTML(existing.code) : ''}" style="text-transform:uppercase; font-weight:700;" />
+          <div class="field" style="min-width:0;">
+            <label style="font-weight:700;">รหัสโค้ดส่วนลด *</label>
+            <input class="input" id="pCode" placeholder="เช่น SUMMER20, VIP100" value="${existing ? escapeHTML(existing.code) : ''}" style="text-transform:uppercase; font-weight:700; width:100%; box-sizing:border-box;" />
           </div>
-          <div class="field">
-            <label style="font-weight:700;">Discount Mode (รูปแบบส่วนลด)</label>
-            <select class="select" id="pDiscountMode">
-              <option value="percent" ${initialType === 'percent' ? 'selected' : ''}>เปอร์เซ็นต์ (% Off)</option>
-              <option value="fixed" ${initialType === 'fixed' ? 'selected' : ''}>จำนวนเงินคงที่ (฿ Fixed Amount)</option>
-              <option value="custom" ${initialType === 'custom' ? 'selected' : ''}>กำหนดข้อความเอง (Custom Campaign)</option>
+          <div class="field" style="min-width:0;">
+            <label style="font-weight:700;">รูปแบบส่วนลด</label>
+            <select class="select" id="pDiscountMode" style="width:100%; box-sizing:border-box;">
+              <option value="percent" ${initialType === 'percent' ? 'selected' : ''}>เปอร์เซ็นต์</option>
+              <option value="fixed" ${initialType === 'fixed' ? 'selected' : ''}>จำนวนเงินคงที่</option>
+              <option value="custom" ${initialType === 'custom' ? 'selected' : ''}>กำหนดข้อความเอง</option>
             </select>
           </div>
         </div>
 
         <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px;">
-          <div class="field" id="valFieldWrap">
-            <label style="font-weight:700;" id="pValLabel">ระบุมูลค่าส่วนลด (กำหนดตัวเลขเอง) *</label>
+          <div class="field" id="valFieldWrap" style="min-width:0;">
+            <label style="font-weight:700;" id="pValLabel">มูลค่าส่วนลด *</label>
             <div style="position:relative; display:flex; align-items:center;">
-              <input type="number" step="0.5" min="1" class="input" id="pDiscountVal" placeholder="เช่น 15, 20, 100" value="${initialVal}" style="padding-right:38px; font-weight:700;" />
+              <input type="number" step="0.5" min="1" class="input" id="pDiscountVal" placeholder="เช่น 15, 20, 100" value="${initialVal}" style="padding-right:38px; font-weight:700; width:100%; box-sizing:border-box;" />
               <span id="pValUnit" style="position:absolute; right:12px; font-weight:800; color:var(--accent-text); font-size:14px;">${initialType === 'fixed' ? '฿' : '%'}</span>
             </div>
           </div>
-          <div class="field">
-            <label style="font-weight:700;">Status (สถานะโปรโมชั่น)</label>
-            <select class="select" id="pStatus">
-              <option value="active" ${(!existing || existing.status === 'active') ? 'selected' : ''}>Active (เปิดใช้งาน)</option>
-              <option value="scheduled" ${existing?.status === 'scheduled' ? 'selected' : ''}>Scheduled (ตั้งเวลาล่วงหน้า)</option>
-              <option value="expired" ${existing?.status === 'expired' ? 'selected' : ''}>Expired (ปิด/หมดอายุ)</option>
+          <div class="field" style="min-width:0;">
+            <label style="font-weight:700;">สถานะ</label>
+            <select class="select" id="pStatus" style="width:100%; box-sizing:border-box;">
+              <option value="active" ${(!existing || existing.status === 'active') ? 'selected' : ''}>เปิดใช้งาน</option>
+              <option value="scheduled" ${existing?.status === 'scheduled' ? 'selected' : ''}>ตั้งเวลาล่วงหน้า</option>
+              <option value="expired" ${existing?.status === 'expired' ? 'selected' : ''}>ปิด / หมดอายุ</option>
             </select>
           </div>
         </div>
 
-        <div class="field">
-          <label style="font-weight:700;">Discount Label (ข้อความแสดงส่วนลด เช่น 15% off, ฿100 off)</label>
-          <input class="input" id="pOff" placeholder="เช่น 15% off, ฿100 off" value="${existing ? escapeHTML(existing.off) : '10% off'}" />
+        <div class="field" style="min-width:0;">
+          <label style="font-weight:700;">ข้อความแสดงส่วนลด</label>
+          <input class="input" id="pOff" placeholder="เช่น 15% off, ฿100 off" value="${existing ? escapeHTML(existing.off) : '10% off'}" style="width:100%; box-sizing:border-box;" />
           <div style="font-size:11.5px; color:var(--muted); margin-top:3px;">ข้อความนี้จะแสดงในแท็กคูปองแนะนำและนำไปคำนวณหักยอดเงินในตะกร้าอัตโนมัติ</div>
         </div>
 
         <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px;">
-          <div class="field">
-            <label style="font-weight:700;">Start Date (วันเริ่มต้น)</label>
-            <input type="date" class="input" id="pStart" value="${existing?.start || new Date().toISOString().split('T')[0]}" />
+          <div class="field" style="min-width:0;">
+            <label style="font-weight:700;">วันเริ่มต้น</label>
+            <input type="date" class="input" id="pStart" value="${existing?.start || new Date().toISOString().split('T')[0]}" style="width:100%; box-sizing:border-box;" />
           </div>
-          <div class="field">
-            <label style="font-weight:700;">End Date (วันสิ้นสุด)</label>
-            <input type="date" class="input" id="pEnd" value="${existing?.end || '2026-12-31'}" />
+          <div class="field" style="min-width:0;">
+            <label style="font-weight:700;">วันสิ้นสุด</label>
+            <input type="date" class="input" id="pEnd" value="${existing?.end || '2026-12-31'}" style="width:100%; box-sizing:border-box;" />
           </div>
         </div>
       </div>
@@ -5677,6 +5682,7 @@
     const view = el(`<div id="storeView"></div>`);
     root.appendChild(view);
 
+    let currentStoreTab = 'home';
     function updateFloatingCartBtn() {
       let floatBtn = document.getElementById('storeFloatingCartBtn');
       const totalQty = Object.values(state.selected).reduce((a, b) => a + Number(b || 0), 0);
@@ -5685,8 +5691,8 @@
         return sum + (p ? Number(p.price) * Number(q) : 0);
       }, 0);
 
-      // Only show floating button on Store page when there are selected items and not on cart/checkout tabs
-      if (totalQty > 0 && state.page === 'store') {
+      // Only show floating button on Store page when actively viewing 'products' tab and items > 0
+      if (totalQty > 0 && state.page === 'store' && currentStoreTab === 'products') {
         if (!floatBtn) {
           floatBtn = el(`
             <button type="button" id="storeFloatingCartBtn" class="floating-cart-btn" title="ไปที่ตะกร้าสินค้า">
@@ -5717,11 +5723,15 @@
           floatBtn.style.display = 'flex';
         }
       } else {
-        if (floatBtn) floatBtn.style.display = 'none';
+        if (floatBtn) {
+          floatBtn.style.display = 'none';
+          floatBtn.remove();
+        }
       }
     }
 
     const drawStore = (key) => {
+      currentStoreTab = key;
       view.innerHTML = '';
       updateFloatingCartBtn();
       if (key === 'home') {
@@ -6484,9 +6494,9 @@
           // 2. Persist to Supabase Database table 'orders' & 'order_items'
           if (supabase) {
             try {
-              const noteMeta = `Customer: ${name} | Farm: ${farmName} | Tag: ${farmTag} | Contact: ${contact} | Promo: ${state.appliedPromo?.code || '-'}`;
+              const noteMeta = `Customer: ${name} | Farm: ${farmName} | Tag: ${farmTag} | Contact: ${contact} | Promo: ${state.appliedPromo?.code || '-'} | Slip: ${uploadedSlipData || ''}`;
               const { data: insertedOrder, error: ordErr } = await supabase.from('orders').insert({
-                store_id: '00000000-0000-0000-0000-000000000001',
+                store_id: state.storeId || '00000000-0000-0000-0000-000000000001',
                 order_number: newOrderNumber,
                 customer_id: null,
                 subtotal: Number(subtotal || 0),
