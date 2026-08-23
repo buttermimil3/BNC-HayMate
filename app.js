@@ -197,12 +197,18 @@
   ];
   // Defaults above shown during loading only; Supabase overwrites on init
 
-  function persistCategories() { /* no-op: Supabase is the single source of truth */ }
+  let CUSTOMERS = (() => {
+    try {
+      const c = JSON.parse(localStorage.getItem('haypos_customers') || '[]');
+      return Array.isArray(c) ? c : [];
+    } catch(e) { return []; }
+  })();
 
-  let CUSTOMERS = [];
-  // CUSTOMERS are loaded from Supabase on init — localStorage is NOT the source of truth
-
-  function persistCustomers() { /* no-op: Supabase is the single source of truth */ }
+  function persistCustomers() {
+    try {
+      localStorage.setItem('haypos_customers', JSON.stringify(CUSTOMERS.slice(0, 100)));
+    } catch(e) {}
+  }
 
   let REVIEWS = [];
   // REVIEWS are loaded from Supabase on init — localStorage is NOT the source of truth
@@ -861,13 +867,39 @@
         updateStockNotifications();
       }
 
-      if (cuRes.data) {
+      if (cuRes.data && cuRes.data.length > 0) {
         CUSTOMERS = cuRes.data.map(c => ({
-          name: c.name, email: c.email || 'customer@bnchaymate.com',
-          orders: c.total_orders || 1, spend: Number(c.total_spending || 0), tag: c.tag || 'New'
+          id: c.id,
+          name: c.name,
+          email: c.email || `${c.name.toLowerCase().replace(/\s+/g, '')}@customer.com`,
+          phone: c.phone || '',
+          address: c.address || '',
+          orders: c.total_orders || 1,
+          spend: Number(c.total_spending || 0),
+          tag: c.tag || 'New'
         }));
-        // Not calling persistCustomers() — Supabase is the source of truth
       }
+
+      // Merge and ensure all customers from ORDERS are always present in CUSTOMERS
+      ORDERS.forEach(o => {
+        if (o.customer) {
+          const cIdx = CUSTOMERS.findIndex(c => c.name.toLowerCase() === o.customer.toLowerCase());
+          if (cIdx === -1) {
+            const custEmail = (o.contact && o.contact.includes('@')) ? o.contact : `${o.customer.toLowerCase().replace(/\s+/g, '')}@customer.com`;
+            const custPhone = (o.contact && !o.contact.includes('@')) ? o.contact : '';
+            CUSTOMERS.push({
+              name: o.customer,
+              email: custEmail,
+              phone: custPhone,
+              address: [o.farm_name, o.farm_tag].filter(Boolean).join(' · '),
+              orders: 1,
+              spend: Number(o.total || 0),
+              tag: o.farm_tag || 'New'
+            });
+          }
+        }
+      });
+      persistCustomers();
 
       if (rRes.data) {
         REVIEWS = rRes.data.map(r => ({
@@ -919,15 +951,41 @@
       })
         .on('broadcast', { event: 'new_order' }, ({ payload }) => {
           console.log('Realtime broadcast new_order received:', payload);
-          if (payload && payload.id) {
-            const existingIdx = ORDERS.findIndex(x => x.id === payload.id);
+          const ord = payload?.order || payload;
+          if (ord && ord.id) {
+            const existingIdx = ORDERS.findIndex(x => String(x.id) === String(ord.id));
             if (existingIdx === -1) {
-              ORDERS.unshift(payload);
+              ORDERS.unshift(ord);
               persistOrders();
-              notifyNewOrder(payload);
-              if (state.page === 'orders' || state.page === 'dashboard' || state.page === 'store') {
-                renderPage();
+            } else {
+              ORDERS[existingIdx] = ord;
+            }
+
+            // Sync Customer
+            if (ord.customer) {
+              const cIdx = CUSTOMERS.findIndex(c => c.name.toLowerCase() === ord.customer.toLowerCase());
+              if (cIdx !== -1) {
+                CUSTOMERS[cIdx].orders = (CUSTOMERS[cIdx].orders || 0) + 1;
+                CUSTOMERS[cIdx].spend = (CUSTOMERS[cIdx].spend || 0) + Number(ord.total || 0);
+              } else {
+                const custEmail = (ord.contact && ord.contact.includes('@')) ? ord.contact : `${ord.customer.toLowerCase().replace(/\s+/g, '')}@customer.com`;
+                const custPhone = (ord.contact && !ord.contact.includes('@')) ? ord.contact : '';
+                CUSTOMERS.unshift({
+                  name: ord.customer,
+                  email: custEmail,
+                  phone: custPhone,
+                  address: [ord.farm_name, ord.farm_tag].filter(Boolean).join(' · '),
+                  orders: 1,
+                  spend: Number(ord.total || 0),
+                  tag: ord.farm_tag || 'New'
+                });
               }
+              persistCustomers();
+            }
+
+            notifyNewOrder(ord);
+            if (['orders', 'dashboard', 'reports', 'customers', 'store'].includes(state.page)) {
+              renderPage();
             }
           }
         })
@@ -2431,8 +2489,15 @@
   }
 
   function renderOrderDetail(root) {
-    const o = ORDERS.find(x => x.id === state.selectedOrder);
-    if (!o) { state.selectedOrder = null; return renderPage(); }
+    const targetId = String(state.selectedOrder || '').trim();
+    const o = ORDERS.find(x => String(x.id).trim() === targetId || String(x.order_number).trim() === targetId || (x.id && targetId.includes(String(x.id))) || (x.order_number && targetId.includes(String(x.order_number))));
+    if (!o) {
+      toast('ไม่พบข้อมูลคำสั่งซื้อ #' + targetId, 'error');
+      state.selectedOrder = null;
+      renderPage();
+      return;
+    }
+
     const stepsOrder = ['waiting', 'verify', 'preparing', 'completed'];
     const stepLabels = {
       waiting: 'Waiting Payment (Order Received)',
@@ -2449,7 +2514,7 @@
             <button class="btn btn-sm" id="backBtn">← Back</button>
             <span class="badge ${STATUS[o.status]?.cls || ''}"><span class="b-dot"></span>${STATUS[o.status]?.label || o.status}</span>
           </div>
-          <h1 class="page-title">Order ${o.id}</h1>
+          <h1 class="page-title">Order ${escapeHTML(o.id)}</h1>
           <div class="page-sub">Placed on ${o.date} by ${escapeHTML(o.customer)}</div>
         </div>
         <div class="flex gap-2" style="flex-wrap:wrap;">
@@ -2590,6 +2655,10 @@
     `));
 
     const slipImgSrc = o.slip_url || generateSampleSlipDataUrl(o);
+    const custEmail = (o.contact && o.contact.includes('@')) ? o.contact : `${(o.customer || 'customer').toLowerCase().replace(/\s+/g, '')}@customer.com`;
+    const custPhone = (o.contact && !o.contact.includes('@')) ? o.contact : '-';
+    const custAddr = [o.farm_name, o.farm_tag].filter(Boolean).join(' · ') || 'Store Delivery';
+    const custInitial = (o.customer || 'C').slice(0, 2).toUpperCase();
 
     grid.appendChild(el(`
       <div style="display:flex; flex-direction:column; gap:18px">
@@ -2597,14 +2666,14 @@
           <div class="card-title">Customer</div>
           <div class="card-sub">Buyer information</div>
           <div class="flex items-center gap-3">
-            <div class="avatar" style="width:44px;height:44px;border-radius:12px">${o.customer.split(' ').map(s => s[0]).slice(0,2).join('')}</div>
+            <div class="avatar" style="width:44px;height:44px;border-radius:12px">${escapeHTML(custInitial)}</div>
             <div>
-              <div style="font-weight:700">${escapeHTML(o.customer)}</div>
-              <div style="font-size:12px; color:var(--muted)">${escapeHTML(o.customer.toLowerCase().replace(/\s+/g, '.'))}@bnchaymate.com</div>
+              <div style="font-weight:700">${escapeHTML(o.customer || 'Customer')}</div>
+              <div style="font-size:12px; color:var(--muted)">${escapeHTML(custEmail)}</div>
             </div>
           </div>
-          <div class="kv" style="margin-top:12px"><span class="k">Phone</span><span class="v">+66 812 345 678</span></div>
-          <div class="kv"><span class="k">Address</span><span class="v">123 Sukhumvit Rd, Bangkok</span></div>
+          <div class="kv" style="margin-top:12px"><span class="k">Phone</span><span class="v">${escapeHTML(custPhone)}</span></div>
+          <div class="kv"><span class="k">Farm / Tag</span><span class="v">${escapeHTML(custAddr)}</span></div>
         </div>
         <div class="card">
           <div class="card-title">Payment Slip</div>
@@ -6487,6 +6556,32 @@
           };
           ORDERS.unshift(newOrder);
           persistOrders();
+
+          // Update Customer records locally
+          const custEmail = (contact && contact.includes('@')) ? contact : `${(name || 'customer').toLowerCase().replace(/\s+/g, '')}@customer.com`;
+          const custPhone = (contact && !contact.includes('@')) ? contact : '';
+          const cIdx = CUSTOMERS.findIndex(c => c.name.toLowerCase() === name.toLowerCase() || (custEmail && c.email.toLowerCase() === custEmail.toLowerCase()));
+          let currentCustObj = null;
+          if (cIdx !== -1) {
+            CUSTOMERS[cIdx].orders = (CUSTOMERS[cIdx].orders || 0) + 1;
+            CUSTOMERS[cIdx].spend = (CUSTOMERS[cIdx].spend || 0) + Number(total || subtotal);
+            if (farmName && !CUSTOMERS[cIdx].address) CUSTOMERS[cIdx].address = farmName;
+            if (farmTag && !CUSTOMERS[cIdx].tag) CUSTOMERS[cIdx].tag = farmTag;
+            currentCustObj = CUSTOMERS[cIdx];
+          } else {
+            currentCustObj = {
+              name: name,
+              email: custEmail,
+              phone: custPhone,
+              address: [farmName, farmTag].filter(Boolean).join(' · '),
+              orders: 1,
+              spend: Number(total || subtotal),
+              tag: farmTag || 'New'
+            };
+            CUSTOMERS.unshift(currentCustObj);
+          }
+          persistCustomers();
+
           notifyNewOrder(newOrder);
 
           // 1. Instant Real-time WebSocket Broadcast to Admin and all connected devices
@@ -6495,21 +6590,38 @@
               syncChannel.send({
                 type: 'broadcast',
                 event: 'new_order',
-                payload: newOrder
+                payload: { order: newOrder, customer: currentCustObj }
               });
             } catch (e) {
               console.warn('Sync broadcast new_order notice:', e);
             }
           }
 
-          // 2. Persist to Supabase Database table 'orders' & 'order_items'
+          // 2. Persist to Supabase Database table 'customers', 'orders' & 'order_items'
           if (supabase) {
             try {
+              let customerDbId = null;
+              try {
+                const { data: custData } = await supabase.from('customers').insert({
+                  store_id: state.storeId || '00000000-0000-0000-0000-000000000001',
+                  name: name,
+                  email: custEmail,
+                  phone: custPhone || null,
+                  address: farmName || null,
+                  tag: (farmTag && ['VIP', 'Regular', 'New'].includes(farmTag)) ? farmTag : 'New'
+                }).select().single();
+                if (custData) {
+                  customerDbId = custData.id;
+                }
+              } catch (e) {
+                console.warn('Customer Supabase insert notice:', e);
+              }
+
               const noteMeta = `Customer: ${name} | Farm: ${farmName} | Tag: ${farmTag} | Contact: ${contact} | Promo: ${state.appliedPromo?.code || '-'} | Slip: ${uploadedSlipData || ''}`;
               const { data: insertedOrder, error: ordErr } = await supabase.from('orders').insert({
                 store_id: state.storeId || '00000000-0000-0000-0000-000000000001',
                 order_number: newOrderNumber,
-                customer_id: null,
+                customer_id: customerDbId || null,
                 subtotal: Number(subtotal || 0),
                 discount: Number(discount || 0),
                 tax: 0,
