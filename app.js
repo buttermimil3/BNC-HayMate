@@ -4303,17 +4303,16 @@
   // ============================================================
   function openReviewCelebrationModal() {
     const title = state.store.reviewPopupTitle || 'Thank You';
-    const msg = state.store.reviewPopupMsg || 'กลับมาใหม่น้า';
     const mascotImg = state.store.reviewPopupImage || '';
 
     const body = el(`
-      <div style="text-align:center; padding:18px 12px 14px; position:relative; overflow:hidden;">
+      <div style="text-align:center; padding:16px 12px 14px; position:relative; overflow:hidden;">
         <!-- Top Curved Bouncing Title above Mascot -->
         <div class="curved-celebration-title">
           ${escapeHTML(title)}
         </div>
 
-        <!-- Center Mascot Image with Bouncing Effect -->
+        <!-- Center Mascot Image with White Border and Gentle Aura -->
         <div class="mascot-celebration-wrap">
           ${mascotImg ? `
             <img src="${escapeHTML(mascotImg)}" alt="Mascot" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='grid';" />
@@ -4327,14 +4326,9 @@
           `}
         </div>
 
-        <!-- Subtitle below Mascot -->
-        <div class="celebration-sub-text">
-          ${escapeHTML(msg)}
-        </div>
-
         <!-- Chubby Heart Button with Home SVG Icon Inside -->
         <button type="button" class="btn-chubby-heart" id="btnCelebrationHome" title="กลับหน้าแรก (Back to Home)" aria-label="Home">
-          <svg viewBox="0 0 100 90" width="76" height="70" fill="var(--primary-600)" style="display:block; filter:drop-shadow(0 6px 14px rgba(239, 166, 193, 0.5));">
+          <svg viewBox="0 0 100 90" width="76" height="70" fill="var(--primary-600)" style="display:block; filter:drop-shadow(0 4px 10px rgba(239, 166, 193, 0.35));">
             <path d="M50 82 C50 82 8 52 8 28 C8 12 22 4 35 4 C43 4 47 8 50 12 C53 8 57 4 65 4 C78 4 92 12 92 28 C92 52 50 82 50 82 Z" />
           </svg>
           <div class="heart-home-icon">
@@ -5541,7 +5535,7 @@
           <div class="flex items-center" style="justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:10px;">
             <div>
               <div class="card-title">Review Celebration Popup (ป๊อปอัพขอบคุณหลังลูกค้าเขียนรีวิว)</div>
-              <div class="card-sub" style="margin-bottom:0;">ปรับแต่งข้อความหัวเรื่องบนหัวมาสคอต, รูปภาพมาสคอตเด้งดึ๋ง, และข้อความขอบคุณด้านล่าง (ปุ่มหัวใจนำทางกลับหน้าแรก)</div>
+              <div class="card-sub" style="margin-bottom:0;">ปรับแต่งข้อความหัวเรื่องบนหัวมาสคอต และรูปภาพมาสคอตเด้งดึ๋ง (ปุ่มหัวใจอ้วนกลมสีชมพูนำทางกลับหน้าแรก)</div>
             </div>
             <button type="button" class="btn btn-sm" id="btnTestCelebrationPopup" style="background:var(--primary-50); border:1.5px solid var(--primary-600); color:var(--accent-text); font-weight:800; border-radius:10px; padding:6px 14px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
@@ -5549,17 +5543,10 @@
             </button>
           </div>
 
-          <div class="grid two-col" style="gap:14px; margin-top:10px;">
-            <div class="field">
-              <label style="font-weight:700;">ข้อความบนหัวมาสคอต (Top Title Text)</label>
-              <input class="input" id="setReviewPopupTitle" value="${escapeHTML(state.store.reviewPopupTitle || 'Thank You')}" placeholder="เช่น Thank You" />
-              <div style="font-size:11.5px; color:var(--muted); margin-top:3px;">ข้อความตัวอักษรโค้งเด้งดึ๋งด้านบนมาสคอต</div>
-            </div>
-            <div class="field">
-              <label style="font-weight:700;">ข้อความด้านล่างมาสคอต (Bottom Subtitle Text)</label>
-              <input class="input" id="setReviewPopupMsg" value="${escapeHTML(state.store.reviewPopupMsg || 'กลับมาใหม่น้า')}" placeholder="เช่น กลับมาใหม่น้า" />
-              <div style="font-size:11.5px; color:var(--muted); margin-top:3px;">ข้อความขอบคุณใต้รูปภาพมาสคอต</div>
-            </div>
+          <div class="field" style="margin-top:10px;">
+            <label style="font-weight:700;">ข้อความบนหัวมาสคอต (Top Title Text)</label>
+            <input class="input" id="setReviewPopupTitle" value="${escapeHTML(state.store.reviewPopupTitle || 'Thank You')}" placeholder="เช่น Thank You" />
+            <div style="font-size:11.5px; color:var(--muted); margin-top:3px;">ข้อความตัวอักษรโค้งเด้งดึ๋งด้านบนมาสคอต</div>
           </div>
 
           <div class="field" style="margin-top:10px;">
