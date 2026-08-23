@@ -3,6 +3,13 @@
   'use strict';
 
   // ============================================================
+  // 🔐 MASTER SECURITY PASSCODE CONFIGURATION (เปลี่ยนรหัส Master ตรงนี้)
+  // รหัสผ่านความปลอดภัยระดับ Master (สำหรับใช้ ลบออเดอร์ และ รีเซ็ตระบบ Factory Reset)
+  // แอดมินเจ้าของร้านสามารถเปลี่ยนรหัส 6 หลักตรงนี้ได้โดยตรงในโค้ด (เช่น '888888')
+  // ============================================================
+  const MASTER_DELETE_PIN = '888888';
+
+  // ============================================================
   // PART 1: Supabase Configuration
   // ============================================================
   const SUPABASE_URL = 'https://nbqhnvzkyrnikfjojhvw.supabase.co';
@@ -304,7 +311,8 @@
     stickyNoteBorder: '#EFE6C7',
     stickyNoteBottomBorder: '#DFD2A8',
     stickyNotePinColor: '#EFA6C1',
-    pin: '123456'
+    pin: '123456',
+    deletePin: '888888'
   };
 
   let loadedStore = DEFAULT_STORE_CONFIG;
@@ -341,7 +349,8 @@
     selected: {},         // Cart: { productId: qty }
     user: null,           // Authenticated user
     pin: '',              // 6-digit PIN buffer
-    correctPin: loadedStore.pin || '123456', // Default 6-digit PIN
+    correctPin: loadedStore.pin || '123456', // Default 6-digit Admin Login PIN
+    deletePin: loadedStore.deletePin || '888888', // Default 6-digit Master Delete & Reset PIN
     clearedNotifProductIds: (() => {
       try {
         const raw = JSON.parse(localStorage.getItem('haypos_cleared_stock_notifs') || '[]');
@@ -1002,6 +1011,23 @@
             }
           }
         })
+        .on('broadcast', { event: 'order_deleted' }, ({ payload }) => {
+          console.log('Realtime broadcast order_deleted received:', payload);
+          if (payload && payload.orderId) {
+            ORDERS = ORDERS.filter(x => String(x.id).trim() !== String(payload.orderId).trim() && String(x.order_number || '').trim() !== String(payload.orderId).trim());
+            persistOrders();
+            state.recentOrderNotifs = state.recentOrderNotifs.filter(x => String(x.id).trim() !== String(payload.orderId).trim());
+            state.clearedOrderNotifIds.add(payload.orderId);
+            saveNotifsState();
+            updateStockNotifications();
+            if (String(state.selectedOrder || '').trim() === String(payload.orderId).trim()) {
+              state.selectedOrder = null;
+            }
+            if (['orders', 'dashboard', 'reports', 'customers'].includes(state.page)) {
+              renderPage();
+            }
+          }
+        })
         .on('broadcast', { event: 'product_created' }, ({ payload }) => {
           console.log('Realtime broadcast product_created received:', payload);
           if (payload && payload.id) {
@@ -1048,7 +1074,11 @@
           if (payload) {
             if (payload.color) state.color = payload.color;
             if (payload.theme) state.theme = payload.theme;
-            if (payload.store) state.store = { ...state.store, ...payload.store };
+            if (payload.store) {
+              state.store = { ...state.store, ...payload.store };
+              if (payload.store.pin) state.correctPin = payload.store.pin;
+              if (payload.store.deletePin) state.deletePin = payload.store.deletePin;
+            }
             if (Array.isArray(payload.banners)) BANNERS = payload.banners;
             applyAppTheme(state.color, state.theme || 'light');
             applyStickyNoteTheme();
@@ -1063,7 +1093,11 @@
             if (ss.primary_color) state.color = ss.primary_color;
             if (ss.dark_mode !== undefined && ss.dark_mode !== null) state.theme = ss.dark_mode ? 'dark' : 'light';
             if (ss.theme_config && typeof ss.theme_config === 'object') {
-              if (ss.theme_config.store) state.store = { ...state.store, ...ss.theme_config.store };
+              if (ss.theme_config.store) {
+                state.store = { ...state.store, ...ss.theme_config.store };
+                if (ss.theme_config.store.pin) state.correctPin = ss.theme_config.store.pin;
+                if (ss.theme_config.store.deletePin) state.deletePin = ss.theme_config.store.deletePin;
+              }
               if (Array.isArray(ss.theme_config.banners)) BANNERS = ss.theme_config.banners;
             }
             applyAppTheme(state.color, state.theme || 'light');
@@ -2401,13 +2435,19 @@
           <tbody>
             ${filtered.length ? filtered.map(o => `
               <tr data-id="${o.id}" style="cursor:pointer;">
-                <td><strong>${o.id}</strong></td>
-                <td>${escapeHTML(o.customer)}</td>
+                <td><strong>${escapeHTML(o.id)}</strong></td>
+                <td>
+                  <div style="font-weight:700;">${escapeHTML(o.customer)}</div>
+                  ${(o.farm_tag || o.farm_name) ? `<div style="font-size:11px; color:var(--muted); margin-top:2px; display:inline-flex; align-items:center; gap:4px;"><span style="background:var(--primary-50); padding:1px 6px; border-radius:6px; border:1px solid var(--border);">${escapeHTML(o.farm_tag || o.farm_name)}</span><button type="button" class="btn btn-sm btn-ghost btn-copy-tag-quick" data-tag="${escapeHTML(o.farm_tag || o.farm_name)}" title="คัดลอกแท็กฟาร์ม" style="padding:1px 5px; font-size:10px; border-radius:4px; border:1px solid var(--border); cursor:pointer;">📋</button></div>` : ''}
+                </td>
                 <td>${o.date}</td>
-                <td>${o.items}</td>
+                <td>${o.items || (o.items_data ? o.items_data.length : 1)}</td>
                 <td>${money(o.total)}</td>
                 <td><span class="badge ${STATUS[o.status]?.cls || ''}"><span class="b-dot"></span>${STATUS[o.status]?.label || o.status}</span></td>
-                <td style="text-align:right"><button class="btn btn-sm">View</button></td>
+                <td style="text-align:right; white-space:nowrap;">
+                  <button class="btn btn-sm btn-view-single" data-id="${o.id}">View</button>
+                  <button class="btn btn-sm btn-danger btn-delete-single" data-id="${o.id}" title="ลบออเดอร์นี้" style="padding:4px 8px; margin-left:4px;">🗑️</button>
+                </td>
               </tr>`).join('') : `<tr><td colspan="7"><div class="empty"><div class="icon">${ICONS.search}</div>No orders match your filters.</div></td></tr>`}
           </tbody>
         </table>
@@ -2415,10 +2455,44 @@
       const wrap = listCard.querySelector('.table-wrap');
       wrap.innerHTML = '';
       wrap.appendChild(table);
-      table.querySelectorAll('tbody tr[data-id]').forEach(tr => tr.addEventListener('click', () => {
-        state.selectedOrder = tr.dataset.id;
+
+      table.querySelectorAll('tbody tr[data-id], .btn-view-single').forEach(elItem => elItem.addEventListener('click', (e) => {
+        if (e.target.closest('.btn-delete-single') || e.target.closest('.btn-copy-tag-quick')) return;
+        const tr = elItem.closest('tr');
+        state.selectedOrder = elItem.dataset.id || tr?.dataset.id;
         renderPage();
       }));
+
+      table.querySelectorAll('.btn-copy-tag-quick').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const tag = btn.dataset.tag || '';
+          const doCopy = () => {
+            btn.textContent = '✓';
+            setTimeout(() => { btn.textContent = '📋'; }, 1800);
+            toast(`คัดลอกแท็กฟาร์ม "${tag}" เรียบร้อยแล้ว`, 'success');
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(tag).then(doCopy).catch(doCopy);
+          } else {
+            doCopy();
+          }
+        });
+      });
+
+      table.querySelectorAll('.btn-delete-single').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const targetOid = btn.dataset.id;
+          const targetOrd = ORDERS.find(x => String(x.id).trim() === String(targetOid).trim() || String(x.order_number || '').trim() === String(targetOid).trim());
+          if (targetOrd) {
+            openDeleteOrderModal(targetOrd, () => {
+              renderList();
+            });
+          }
+        });
+      });
+
       const pg = listCard.querySelector('.pagination');
       pg.innerHTML = `<span style="margin-right:auto; color:var(--muted); font-size:12.5px">Showing ${filtered.length} of ${ORDERS.length}</span>
         <button class="pg active">1</button>`;
@@ -2428,6 +2502,170 @@
     filterBar.querySelector('#orderSearch').addEventListener('input', (e) => { state.orderSearch = e.target.value; renderList(); });
     filterBar.querySelector('#orderStatus').addEventListener('change', (e) => { state.orderFilter = e.target.value; renderList(); });
   };
+
+  function openDeleteOrderModal(order, onSuccess) {
+    if (!order) return;
+    const deletePin = String(MASTER_DELETE_PIN || '888888');
+    let enteredCode = '';
+
+    const body = el(`
+      <div class="calc-pin-card">
+        <div style="background:rgba(229,139,148,0.12); border:1.5px solid var(--danger); border-radius:14px; padding:12px; display:flex; gap:10px; align-items:flex-start; text-align:left; margin-bottom:14px;">
+          <div style="color:var(--danger); font-size:20px; flex:none; margin-top:1px;">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+          </div>
+          <div>
+            <div style="font-weight:800; font-size:13px; color:var(--danger);">ยืนยันการลบออเดอร์ #${escapeHTML(order.id)}</div>
+            <div style="font-size:11.5px; color:var(--muted); line-height:1.4; margin-top:2px;">
+              การลบจะนำออเดอร์นี้ออกจากฐานข้อมูลและรีเซ็ตยอดอย่างถาวร (ต้องใส่รหัสผ่านความปลอดภัยสำหรับการลบ)
+            </div>
+          </div>
+        </div>
+
+        <div style="font-weight:700; color:var(--text); font-size:13px; margin-bottom:8px;">
+          กรุณากดรหัสความปลอดภัยสำหรับการลบ (Master PIN) *
+        </div>
+
+        <!-- Calculator Display Screen -->
+        <div class="calc-screen" id="delCalcScreen">
+          <div class="calc-dots" id="delDotsRow">
+            <span class="calc-dot"></span>
+            <span class="calc-dot"></span>
+            <span class="calc-dot"></span>
+            <span class="calc-dot"></span>
+            <span class="calc-dot"></span>
+            <span class="calc-dot"></span>
+          </div>
+        </div>
+
+        <!-- Calculator Round Keypad -->
+        <div class="calc-keypad">
+          <button type="button" class="calc-key" data-k="1">1</button>
+          <button type="button" class="calc-key" data-k="2">2</button>
+          <button type="button" class="calc-key" data-k="3">3</button>
+          <button type="button" class="calc-key" data-k="4">4</button>
+          <button type="button" class="calc-key" data-k="5">5</button>
+          <button type="button" class="calc-key" data-k="6">6</button>
+          <button type="button" class="calc-key" data-k="7">7</button>
+          <button type="button" class="calc-key" data-k="8">8</button>
+          <button type="button" class="calc-key" data-k="9">9</button>
+          <button type="button" class="calc-key calc-key-action" data-k="clear">C</button>
+          <button type="button" class="calc-key" data-k="0">0</button>
+          <button type="button" class="calc-key calc-key-del" data-k="del">⌫</button>
+        </div>
+
+        <div style="margin-top: 14px; font-size: 11.5px; color: var(--muted);">
+          รหัสลบถูกเก็บเป็นความลับในโค้ดระบบ
+        </div>
+      </div>
+    `);
+
+    function updateDelDots() {
+      const dots = body.querySelectorAll('.calc-dot');
+      dots.forEach((d, idx) => {
+        if (idx < enteredCode.length) d.classList.add('filled');
+        else d.classList.remove('filled');
+      });
+    }
+
+    const executeDelete = async () => {
+      const isMatch = (enteredCode === deletePin);
+      if (!isMatch) {
+        const dots = body.querySelectorAll('.calc-dot');
+        dots.forEach(dot => dot.classList.add('error'));
+        toast('รหัสผ่านความปลอดภัยสำหรับการลบไม่ถูกต้อง!', 'error');
+        setTimeout(() => {
+          enteredCode = '';
+          dots.forEach(dot => { dot.classList.remove('filled'); dot.classList.remove('error'); });
+        }, 450);
+        return;
+      }
+
+      // 1. Delete from ORDERS array
+      ORDERS = ORDERS.filter(x => String(x.id).trim() !== String(order.id).trim() && String(x.order_number || '').trim() !== String(order.id).trim());
+      persistOrders();
+
+      // 2. Remove from recentOrderNotifs
+      state.recentOrderNotifs = state.recentOrderNotifs.filter(x => String(x.id).trim() !== String(order.id).trim());
+      state.clearedOrderNotifIds.add(order.id);
+      saveNotifsState();
+      updateStockNotifications();
+
+      // 3. Delete from Supabase
+      if (supabase) {
+        try {
+          await supabase.from('order_items').delete().eq('order_id', order.id);
+          await supabase.from('orders').delete().or(`id.eq.${order.id},order_number.eq.${order.id}`);
+        } catch (e) {
+          console.warn('Delete order Supabase notice:', e);
+        }
+      }
+
+      // 4. Realtime broadcast order_deleted to all devices
+      if (syncChannel) {
+        try {
+          syncChannel.send({
+            type: 'broadcast',
+            event: 'order_deleted',
+            payload: { orderId: order.id }
+          });
+        } catch (e) {}
+      }
+
+      closeModal();
+      document.removeEventListener('keydown', handleKeydown);
+      toast(`ลบออเดอร์ #${order.id} สำเร็จเรียบร้อย`, 'success');
+      if (onSuccess) onSuccess();
+      else {
+        state.selectedOrder = null;
+        renderPage();
+      }
+    };
+
+    body.querySelectorAll('.calc-key').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const k = btn.dataset.k;
+        if (k === 'clear') {
+          enteredCode = '';
+        } else if (k === 'del') {
+          enteredCode = enteredCode.slice(0, -1);
+        } else if (enteredCode.length < 6) {
+          enteredCode += k;
+          if (enteredCode.length === 6) {
+            setTimeout(executeDelete, 120);
+          }
+        }
+        updateDelDots();
+      });
+    });
+
+    const handleKeydown = (e) => {
+      if (e.key >= '0' && e.key <= '9') {
+        if (enteredCode.length < 6) {
+          enteredCode += e.key;
+          updateDelDots();
+          if (enteredCode.length === 6) setTimeout(executeDelete, 120);
+        }
+      } else if (e.key === 'Backspace') {
+        enteredCode = enteredCode.slice(0, -1);
+        updateDelDots();
+      } else if (e.key === 'Escape') {
+        closeModal();
+        document.removeEventListener('keydown', handleKeydown);
+      }
+    };
+    document.addEventListener('keydown', handleKeydown);
+
+    openModal({
+      title: `ลบออเดอร์ (Delete Order: #${order.id})`,
+      body,
+      actions: [
+        { label: 'ยกเลิก (Cancel)', kind: 'ghost', onClick: () => document.removeEventListener('keydown', handleKeydown) },
+        { label: 'ยืนยันลบออเดอร์', kind: 'danger', close: false, onClick: executeDelete }
+      ]
+    });
+  }
 
   function generateSampleSlipDataUrl(order) {
     try {
@@ -2521,7 +2759,11 @@
           <button class="btn ${o.status === 'waiting' ? 'btn-primary' : ''}" data-action="verify">${o.status !== 'waiting' ? '✓ Verified' : 'Verify Payment'}</button>
           <button class="btn ${o.status === 'verify' ? 'btn-primary' : ''}" data-action="prepare">${o.status === 'preparing' || o.status === 'completed' ? '✓ Prepared' : 'Prepare Order'}</button>
           <button class="btn ${o.status === 'preparing' ? 'btn-primary' : ''}" data-action="complete">${o.status === 'completed' ? '✓ Completed' : 'Complete Order'}</button>
-          <button class="btn btn-danger" data-action="cancel">Cancel</button>
+          <button class="btn btn-ghost" data-action="cancel" style="color:var(--muted);">Cancel</button>
+          <button class="btn btn-danger" data-action="delete_order" style="display:inline-flex; align-items:center; gap:4px; font-weight:700;">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+            ลบออเดอร์
+          </button>
         </div>
       </div>
     `));
@@ -2529,6 +2771,13 @@
     root.querySelector('#backBtn').addEventListener('click', () => { state.selectedOrder = null; renderPage(); });
     root.querySelectorAll('[data-action]').forEach(b => b.addEventListener('click', async () => {
       const act = b.dataset.action;
+      if (act === 'delete_order') {
+        openDeleteOrderModal(o, () => {
+          state.selectedOrder = null;
+          renderPage();
+        });
+        return;
+      }
       if (act === 'cancel') {
         confirmDialog('Cancel this order?', async () => {
           o.status = 'cancelled';
@@ -2673,7 +2922,13 @@
             </div>
           </div>
           <div class="kv" style="margin-top:12px"><span class="k">Phone</span><span class="v">${escapeHTML(custPhone)}</span></div>
-          <div class="kv"><span class="k">Farm / Tag</span><span class="v">${escapeHTML(custAddr)}</span></div>
+          <div class="kv" style="align-items:center;">
+            <span class="k">Farm / Tag</span>
+            <span class="v" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+              <strong style="color:var(--text);">${escapeHTML(custAddr)}</strong>
+              ${(o.farm_tag || o.farm_name) ? `<button type="button" class="btn btn-sm btn-ghost btn-copy-farmtag" data-tag="${escapeHTML(o.farm_tag || o.farm_name)}" title="คัดลอกแท็กฟาร์ม" style="font-size:11px; padding:2px 8px; border:1px solid var(--border); border-radius:8px; display:inline-flex; align-items:center; gap:4px; font-weight:700; color:var(--accent-text); cursor:pointer;">📋 Copy Tag</button>` : ''}
+            </span>
+          </div>
         </div>
         <div class="card">
           <div class="card-title">Payment Slip</div>
@@ -2689,6 +2944,29 @@
         </div>
       </div>
     `));
+
+    grid.querySelectorAll('.btn-copy-farmtag').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tagText = btn.dataset.tag || '';
+        const doCopy = () => {
+          btn.textContent = '✓ Copied!';
+          btn.style.color = '#3F8E63';
+          btn.style.borderColor = '#7CC59A';
+          setTimeout(() => {
+            btn.innerHTML = '📋 Copy Tag';
+            btn.style.color = 'var(--accent-text)';
+            btn.style.borderColor = 'var(--border)';
+          }, 2000);
+          toast(`คัดลอกแท็กฟาร์ม "${tagText}" เรียบร้อยแล้ว`, 'success');
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(tagText).then(doCopy).catch(doCopy);
+        } else {
+          doCopy();
+        }
+      });
+    });
   }
 
   // ============================================================
@@ -3584,6 +3862,12 @@
           <div><div style="font-weight:800; font-size:16px">${escapeHTML(c.name)}</div><div style="color:var(--muted); font-size:12.5px">${escapeHTML(c.email)}</div></div>
           <span class="badge ${c.tag === 'VIP' ? '' : c.tag === 'Regular' ? 'info' : 'success'}" style="margin-left:auto">${c.tag}</span>
         </div>
+
+        <div class="card" style="margin-bottom:12px; padding:10px 14px; background:var(--primary-50); border:1px solid var(--border); border-radius:12px;">
+          <div class="kv" style="margin:0;"><span class="k">Farm / Tag</span><span class="v" style="display:flex; align-items:center; gap:6px;"><strong>${escapeHTML(c.address || c.tag || '-')}</strong> ${(c.address || c.tag) ? `<button type="button" class="btn btn-sm btn-ghost btn-copy-cust-tag" data-tag="${escapeHTML(c.address || c.tag)}" style="font-size:11px; padding:2px 8px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">📋 Copy Tag</button>` : ''}</span></div>
+          ${c.phone ? `<div class="kv" style="margin-top:6px;"><span class="k">Phone</span><span class="v">${escapeHTML(c.phone)}</span></div>` : ''}
+        </div>
+
         <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px">
           <div class="card stat" style="padding:14px"><span class="label">Total Orders</span><span class="value" style="font-size:20px">${c.orders}</span></div>
           <div class="card stat" style="padding:14px"><span class="label">Total Spending</span><span class="value" style="font-size:20px">${money(c.spend)}</span></div>
@@ -3595,6 +3879,24 @@
         <div class="field"><label>Customer notes</label><textarea class="textarea" id="custNotesArea" placeholder="Prefers oat milk, regular takeaway..."></textarea></div>
       </div>
     `);
+
+    body.querySelectorAll('.btn-copy-cust-tag').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tag = btn.dataset.tag || '';
+        const doCopy = () => {
+          btn.textContent = '✓ Copied!';
+          setTimeout(() => { btn.innerHTML = '📋 Copy Tag'; }, 1800);
+          toast(`คัดลอกแท็กฟาร์ม "${tag}" เรียบร้อยแล้ว`, 'success');
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(tag).then(doCopy).catch(doCopy);
+        } else {
+          doCopy();
+        }
+      });
+    });
+
     openModal({ title: 'Customer Profile', body, actions: [{ label: 'Close', kind: 'ghost' }, { label: 'Save Notes', kind: 'primary', onClick: () => toast('Customer notes saved', 'success') }] });
   }
 
@@ -4721,15 +5023,16 @@
           <div id="paymentAccountsList" style="display:flex; flex-direction:column; gap:12px; margin-top:14px;"></div>
         </div>
 
-        <!-- SECTION 10: Security & Appearance -->
+        <!-- SECTION 10: Security & Passcodes -->
         <div class="grid two-col">
           <div class="card">
-            <div class="card-title">Admin Security Passcode (รหัสผ่าน 6 หลัก)</div>
-            <div class="card-sub">รหัสผ่าน 6 หลักสำหรับปลดล็อคเข้าสู่ระบบแอดมิน</div>
+            <div class="card-title">Admin Security Passcode (รหัสผ่านเข้าสู่ระบบแอดมิน)</div>
+            <div class="card-sub">กำหนดรหัสผ่าน 6 หลักสำหรับหน้าจอล็อคอินแอดมิน (ส่วนรหัส Master PIN สำหรับลบออเดอร์/รีเซ็ต ถูกจัดเก็บอย่างปลอดภัยในโค้ดระบบ)</div>
+            
             <div class="field" style="margin-top:12px;">
-              <label>6-Digit PIN Passcode</label>
+              <label style="font-weight:700;">Admin Login PIN (6-Digit Passcode)</label>
               <input class="input" id="setAdminPin" type="password" maxlength="6" value="${escapeHTML(state.correctPin || '123456')}" style="max-width:200px; font-size:18px; letter-spacing:4px; font-weight:700; text-align:center;" />
-              <div style="font-size:11.5px; color:var(--muted); margin-top:4px;">กำหนดตัวเลข 6 หลักสำหรับหน้าจอล็อค (เริ่มต้น: 123456)</div>
+              <div style="font-size:11.5px; color:var(--muted); margin-top:4px;">ตัวเลข 6 หลักสำหรับหน้าจอล็อคอินแอดมิน (ค่าเริ่มต้น: 123456)</div>
             </div>
           </div>
 
@@ -5382,6 +5685,11 @@
         state.correctPin = pinVal;
         state.store.pin = pinVal;
       }
+      const delPinVal = formWrap.querySelector('#setDeletePin')?.value.trim();
+      if (delPinVal && delPinVal.length === 6 && /^\d+$/.test(delPinVal)) {
+        state.deletePin = delPinVal;
+        state.store.deletePin = delPinVal;
+      }
 
       // Save Theme & Color instantly
       state.store.color = state.color;
@@ -5508,7 +5816,7 @@
   // Factory Reset All Data (Requires 6-digit Security PIN)
   // ============================================================
   function openFactoryResetModal() {
-    const currentPin = String(state.correctPin || state.store.pin || '123456');
+    const currentDeletePin = String(MASTER_DELETE_PIN || '888888');
     let enteredCode = '';
 
     const body = el(`
@@ -5526,7 +5834,7 @@
         </div>
 
         <div style="font-weight:700; color:var(--text); font-size:13px; margin-bottom:8px;">
-          กรุณากดรหัสผ่าน PIN (6 หลัก) *
+          กรุณากดรหัสความปลอดภัยสำหรับการรีเซ็ต (Master PIN) *
         </div>
 
         <!-- Calculator Display Screen -->
@@ -5558,7 +5866,7 @@
         </div>
 
         <div style="margin-top: 14px; font-size: 11.5px; color: var(--muted);">
-          รหัส PIN เริ่มต้น: <strong>123456</strong>
+          รหัสความปลอดภัยสำหรับการรีเซ็ตถูกเก็บเป็นความลับในโค้ดระบบ
         </div>
       </div>
     `);
@@ -5572,7 +5880,7 @@
     }
 
     const executeReset = async () => {
-      const isMatch = (enteredCode === currentPin || enteredCode === '123456' || enteredCode === '202408');
+      const isMatch = (enteredCode === currentDeletePin);
 
       if (!isMatch) {
         const dots = body.querySelectorAll('.calc-dot');
@@ -6550,7 +6858,7 @@
             discount: discount,
             promo_code: state.appliedPromo ? state.appliedPromo.code : '',
             delivery: 0,
-            total: total || subtotal,
+            total: Number(total),
             status: 'waiting',
             slip_url: uploadedSlipData || ''
           };
@@ -6564,7 +6872,7 @@
           let currentCustObj = null;
           if (cIdx !== -1) {
             CUSTOMERS[cIdx].orders = (CUSTOMERS[cIdx].orders || 0) + 1;
-            CUSTOMERS[cIdx].spend = (CUSTOMERS[cIdx].spend || 0) + Number(total || subtotal);
+            CUSTOMERS[cIdx].spend = (CUSTOMERS[cIdx].spend || 0) + Number(total);
             if (farmName && !CUSTOMERS[cIdx].address) CUSTOMERS[cIdx].address = farmName;
             if (farmTag && !CUSTOMERS[cIdx].tag) CUSTOMERS[cIdx].tag = farmTag;
             currentCustObj = CUSTOMERS[cIdx];
@@ -6575,7 +6883,7 @@
               phone: custPhone,
               address: [farmName, farmTag].filter(Boolean).join(' · '),
               orders: 1,
-              spend: Number(total || subtotal),
+              spend: Number(total),
               tag: farmTag || 'New'
             };
             CUSTOMERS.unshift(currentCustObj);
