@@ -290,6 +290,11 @@
     starLabel3: '3 ดวงใจ - ปานกลาง / รสชาติดี',
     starLabel4: '4 ดวงใจ - อร่อยและประทับใจมาก',
     starLabel5: '5 ดวงใจ - ประทับใจมากที่สุด ยอดเยี่ยม!',
+    // Review Celebration Popup Settings (Configurable in Settings)
+    reviewPopupTitle: 'ขอบคุณสำหรับรีวิวนะคะ! 💖',
+    reviewPopupMsg: 'ทุกรีวิวและคะแนนคือกำลังใจอันล้ำค่าของฟาร์ม BNC HayMate ขอบคุณที่ไว้วางใจและเลือกอุดหนุนเรานะคะ ✨',
+    reviewPopupImage: '',
+    reviewPopupMascotEmoji: '🌾',
     currency: 'THB (฿)',
     timezone: 'UTC+7 Bangkok',
     bank_name: '',
@@ -347,6 +352,7 @@
     color: '#F8BFD4',
     font: 'Plus Jakarta Sans',
     selected: {},         // Cart: { productId: qty }
+    checkoutForm: { name: '', farmName: '', farmTag: '', contact: '', uploadedSlipData: '' },
     user: null,           // Authenticated user
     pin: '',              // 6-digit PIN buffer
     correctPin: loadedStore.pin || '123456', // Default 6-digit Admin Login PIN
@@ -1063,6 +1069,17 @@
             }
           }
         })
+        .on('broadcast', { event: 'review_created' }, ({ payload }) => {
+          console.log('Realtime broadcast review_created received:', payload);
+          if (payload && payload.id) {
+            if (!REVIEWS.some(r => String(r.id) === String(payload.id))) {
+              REVIEWS.unshift(payload);
+              if (['reviews', 'dashboard', 'store'].includes(state.page)) {
+                renderPage();
+              }
+            }
+          }
+        })
         .on('broadcast', { event: 'product_deleted' }, ({ payload }) => {
           console.log('Realtime broadcast product_deleted received:', payload);
           if (payload && payload.id) {
@@ -1255,6 +1272,26 @@
                 status: pr.status || 'active'
               });
               renderPage();
+            }
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'reviews' }, (payload) => {
+          console.log('Realtime reviews change:', payload);
+          if (payload.eventType === 'INSERT') {
+            const r = payload.new;
+            if (!REVIEWS.some(x => String(x.id) === String(r.id))) {
+              REVIEWS.unshift({
+                id: r.id,
+                name: r.customer_name || 'Valued Guest',
+                avatar: (r.customer_name || 'VG').split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase(),
+                rating: r.rating || 5,
+                date: (r.created_at || '').split('T')[0] || new Date().toISOString().split('T')[0],
+                text: r.comment || '',
+                pinned: !!r.is_pinned
+              });
+              if (['reviews', 'dashboard', 'store'].includes(state.page)) {
+                renderPage();
+              }
             }
           }
         })
@@ -2711,6 +2748,36 @@
     });
   }
 
+  // Universal Cross-Browser Image Compression Helper
+  function compressImageToDataUrl(file, maxWidth = 900, maxHeight = 1200, quality = 0.82) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressed);
+        };
+        img.onerror = () => resolve(e.target.result);
+        img.src = e.target.result;
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  }
+
   function generateSampleSlipDataUrl(order) {
     try {
       const canvas = document.createElement('canvas');
@@ -2947,11 +3014,11 @@
       </div>
     `));
 
-    const slipImgSrc = o.slip_url || generateSampleSlipDataUrl(o);
     const custEmail = (o.contact && o.contact.includes('@')) ? o.contact : `${(o.customer || 'customer').toLowerCase().replace(/\s+/g, '')}@customer.com`;
     const custPhone = (o.contact && !o.contact.includes('@')) ? o.contact : '-';
     const custAddr = [o.farm_name, o.farm_tag].filter(Boolean).join(' · ') || 'Store Delivery';
     const custInitial = (o.customer || 'C').slice(0, 2).toUpperCase();
+    const slipImgSrc = (o.slip_url && o.slip_url.trim()) ? o.slip_url.trim() : '';
 
     grid.appendChild(el(`
       <div style="display:flex; flex-direction:column; gap:18px">
@@ -2981,15 +3048,23 @@
         </div>
         <div class="card">
           <div class="card-title">Payment Slip</div>
-          <div class="card-sub">${o.slip_url ? 'Customer Uploaded Slip' : 'Verified E-Slip'}</div>
+          <div class="card-sub">${slipImgSrc ? 'Customer Uploaded Transfer Slip' : 'No slip attached'}</div>
           
-          <div class="file-preview" style="aspect-ratio:auto; padding:10px; max-height:260px; overflow:hidden; background:var(--card); margin-top:8px;">
-            <img src="${slipImgSrc}" alt="Payment Slip" style="max-height:240px; max-width:100%; border-radius:8px; object-fit:contain; margin:0 auto; display:block; box-shadow:var(--shadow-soft);" />
-          </div>
-          
-          <a href="${slipImgSrc}" download="Payment-Slip-${o.id}.png" class="btn btn-primary btn-block mt-3" style="text-align:center; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:6px;">
-            ดาวน์โหลดสลิป (Download Slip)
-          </a>
+          ${slipImgSrc ? `
+            <div class="file-preview" style="aspect-ratio:auto; padding:10px; max-height:280px; overflow:hidden; background:var(--card); margin-top:8px;">
+              <img src="${slipImgSrc}" alt="Payment Slip" style="max-height:260px; max-width:100%; border-radius:8px; object-fit:contain; margin:0 auto; display:block; box-shadow:var(--shadow-soft);" />
+            </div>
+            
+            <a href="${slipImgSrc}" download="Payment-Slip-${o.id}.png" class="btn btn-primary btn-block mt-3" style="text-align:center; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:6px; font-weight:700;">
+              ดาวน์โหลดสลิป (Download Slip)
+            </a>
+          ` : `
+            <div style="text-align:center; padding:24px 16px; color:var(--muted); background:var(--primary-50); border:1px dashed var(--border); border-radius:12px; margin-top:8px;">
+              <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.8" style="margin:0 auto 6px; display:block; color:var(--muted);"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+              <div style="font-size:13px; font-weight:700; color:var(--text);">ไม่มีสลิปแนบมากับออเดอร์นี้</div>
+              <div style="font-size:11.5px; color:var(--muted); margin-top:2px;">(ออเดอร์จากการชำระเงินทางช่องทางอื่น)</div>
+            </div>
+          `}
         </div>
       </div>
     `));
@@ -4213,6 +4288,102 @@
     });
   }
 
+  // ============================================================
+  // Review Celebration & Thank You Popup
+  // ============================================================
+  function openReviewCelebrationModal(rating = 5, customerName = '') {
+    const title = state.store.reviewPopupTitle || 'ขอบคุณสำหรับรีวิวนะคะ! 💖';
+    const msg = state.store.reviewPopupMsg || 'ทุกรีวิวและคะแนนคือกำลังใจอันล้ำค่าของฟาร์ม BNC HayMate ขอบคุณที่ไว้วางใจและเลือกอุดหนุนเรานะคะ ✨';
+    const mascotImg = state.store.reviewPopupImage || '';
+    const mascotEmoji = state.store.reviewPopupMascotEmoji || '🌾';
+
+    const body = el(`
+      <div style="text-align:center; padding:12px 6px 14px; position:relative; overflow:hidden;">
+        <!-- Cute Bursting Confetti / Hearts Container -->
+        <div class="celebration-burst-container" id="celebrationBurst"></div>
+
+        <!-- Mascot Avatar / Profile Image with Bounce Animation -->
+        <div style="position:relative; width:94px; height:94px; margin:0 auto 14px; border-radius:28px; background:linear-gradient(135deg, var(--primary-100), var(--primary-50)); border:3px solid var(--primary-600); box-shadow:0 8px 24px rgba(239, 166, 193, 0.4); display:grid; place-items:center; animation:popBounce .6s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+          ${mascotImg ? `
+            <img src="${escapeHTML(mascotImg)}" alt="Mascot" style="width:100%; height:100%; object-fit:cover; border-radius:24px;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='grid';" />
+            <div style="display:none; font-size:44px;">${escapeHTML(mascotEmoji)}</div>
+          ` : `
+            <div style="font-size:46px;">${escapeHTML(mascotEmoji)}</div>
+          `}
+          <div style="position:absolute; bottom:-6px; right:-6px; background:#FFFFFF; border:2px solid var(--primary-600); border-radius:50%; width:30px; height:30px; display:grid; place-items:center; box-shadow:var(--shadow-soft);">
+            <span style="font-size:16px;">💖</span>
+          </div>
+        </div>
+
+        <!-- Big Sunshine Heading Title -->
+        <h2 style="font-family:'Fredoka', 'Plus Jakarta Sans', sans-serif; font-size:22px; font-weight:800; color:var(--text); margin:0 0 6px; line-height:1.3; letter-spacing:-0.3px;">
+          ${escapeHTML(title)}
+        </h2>
+
+        <!-- Rating Hearts Display -->
+        <div style="display:flex; justify-content:center; gap:6px; margin:8px 0 14px;">
+          ${[1, 2, 3, 4, 5].map(n => `
+            <span style="display:inline-flex; align-items:center;">
+              <svg viewBox="0 0 24 24" width="22" height="22" style="fill:${n <= rating ? 'var(--primary-600)' : 'var(--border)'}; stroke:${n <= rating ? 'var(--primary-600)' : 'var(--border)'}; stroke-width:2;"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            </span>
+          `).join('')}
+        </div>
+
+        <!-- Sweet Speech Bubble -->
+        <div style="background:var(--primary-50); border:1.5px dashed var(--border); border-radius:18px; padding:14px 18px; position:relative; margin:0 4px 16px;">
+          <div style="font-size:13.5px; line-height:1.6; color:var(--text); font-weight:600;">
+            ${escapeHTML(msg)}
+          </div>
+          ${customerName ? `
+            <div style="font-size:11.5px; color:var(--muted); font-weight:700; margin-top:6px;">
+              — จากใจทีมงาน BNC HayMate ถึงคุณ ${escapeHTML(customerName)} 🌾
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- Cute Action Button -->
+        <button type="button" class="btn btn-primary" id="btnCelebrationClose" style="font-size:14px; font-weight:800; padding:10px 28px; border-radius:14px; box-shadow:0 4px 14px rgba(239,166,193,0.4); cursor:pointer;">
+          ยินดีต้อนรับเสมอค่ะ ✨
+        </button>
+      </div>
+    `);
+
+    // Trigger Floating Confetti / Hearts Burst Animation
+    const burstContainer = body.querySelector('#celebrationBurst');
+    if (burstContainer) {
+      const emojis = ['💖', '✨', '🌸', '⭐', '🎉', '🌾', '💫', '💕'];
+      for (let i = 0; i < 28; i++) {
+        const span = document.createElement('span');
+        span.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+        const left = 8 + Math.random() * 84;
+        const animDuration = 1.2 + Math.random() * 1.4;
+        const delay = Math.random() * 0.35;
+        const size = 16 + Math.random() * 18;
+        span.style.cssText = `
+          position: absolute;
+          left: ${left}%;
+          top: 65%;
+          font-size: ${size}px;
+          opacity: 0;
+          pointer-events: none;
+          animation: floatBurst ${animDuration}s cubic-bezier(0.25, 1, 0.5, 1) ${delay}s forwards;
+          z-index: 10;
+        `;
+        burstContainer.appendChild(span);
+      }
+    }
+
+    body.querySelector('#btnCelebrationClose')?.addEventListener('click', () => {
+      closeModal();
+    });
+
+    openModal({
+      title: '',
+      body,
+      actions: []
+    });
+  }
+
   function openWriteReviewModal(order) {
     let selectedRating = 5;
     const body = el(`
@@ -4283,7 +4454,7 @@
           const date = new Date().toISOString().split('T')[0];
 
           const newRev = {
-            id: Date.now(),
+            id: 'rev_' + Date.now(),
             name,
             avatar,
             rating: selectedRating,
@@ -4293,18 +4464,36 @@
           };
 
           REVIEWS.unshift(newRev);
-          persistReviews();
 
           if (supabase) {
-            await supabase.from('reviews').insert({
-              customer_name: name,
-              rating: selectedRating,
-              comment: text
-            }).catch(() => {});
+            try {
+              await supabase.from('reviews').insert({
+                store_id: state.storeId || '00000000-0000-0000-0000-000000000001',
+                customer_name: name,
+                rating: selectedRating,
+                comment: text,
+                is_pinned: false
+              });
+            } catch (e) {
+              console.warn('Supabase review insert notice:', e);
+            }
           }
 
-          toast(`ขอบคุณสำหรับรีวิวและคะแนน ${selectedRating} ดวงใจนะคะ!`, 'success');
+          if (syncChannel) {
+            try {
+              syncChannel.send({
+                type: 'broadcast',
+                event: 'review_created',
+                payload: newRev
+              });
+            } catch (e) {}
+          }
+
+          closeModal();
           renderPage();
+          setTimeout(() => {
+            openReviewCelebrationModal(selectedRating, name);
+          }, 200);
         }}
       ]
     });
@@ -5361,7 +5550,50 @@
               </div>
             </div>
           </div>
-          <!-- SECTION 12: Danger Zone / Factory Reset (ล้างข้อมูลระบบทั้งหมด & รีเซ็ตค่าเริ่มต้น) -->
+        </div>
+
+        <!-- SECTION 12: Review Celebration Popup (ป๊อปอัพขอบคุณหลังรีวิว) -->
+        <div class="card" style="margin-top:14px;">
+          <div class="flex items-center" style="justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:10px;">
+            <div>
+              <div class="card-title">Review Celebration Popup (ป๊อปอัพขอบคุณหลังลูกค้าเขียนรีวิว)</div>
+              <div class="card-sub" style="margin-bottom:0;">ปรับแต่งข้อความ, รูปโปรไฟล์/มาสคอต และเอฟเฟกต์พลุดวงใจน่ารักๆ ที่จะเด้งขึ้นมาหลังจากลูกค้าส่งรีวิว</div>
+            </div>
+            <button type="button" class="btn btn-sm" id="btnTestCelebrationPopup" style="background:var(--primary-50); border:1.5px solid var(--primary-600); color:var(--accent-text); font-weight:800; border-radius:10px; padding:6px 14px; cursor:pointer;">
+              ✨ ทดสอบเปิดป๊อปอัพ (Test Preview)
+            </button>
+          </div>
+
+          <div class="grid two-col" style="gap:14px; margin-top:10px;">
+            <div class="field">
+              <label style="font-weight:700;">ข้อความหัวเรื่องป๊อปอัพ (Popup Title)</label>
+              <input class="input" id="setReviewPopupTitle" value="${escapeHTML(state.store.reviewPopupTitle || 'ขอบคุณสำหรับรีวิวนะคะ! 💖')}" placeholder="เช่น ขอบคุณสำหรับดวงใจและรีวิวนะคะ! 💖" />
+            </div>
+            <div class="field">
+              <label style="font-weight:700;">ข้อความขอบคุณในบับเบิ้ล (Speech Bubble Message)</label>
+              <textarea class="textarea" id="setReviewPopupMsg" rows="2" placeholder="เช่น ทุกรีวิวและคะแนนคือกำลังใจอันล้ำค่าของฟาร์ม BNC HayMate ขอบคุณที่ไว้วางใจและเลือกอุดหนุนเรานะคะ ✨">${escapeHTML(state.store.reviewPopupMsg || 'ทุกรีวิวและคะแนนคือกำลังใจอันล้ำค่าของฟาร์ม BNC HayMate ขอบคุณที่ไว้วางใจและเลือกอุดหนุนเรานะคะ ✨')}</textarea>
+            </div>
+          </div>
+
+          <div class="grid two-col" style="gap:14px; margin-top:10px;">
+            <div class="field">
+              <label style="font-weight:700;">อิโมจิมาสคอตสำรอง (Mascot Emoji)</label>
+              <input class="input" id="setReviewPopupEmoji" value="${escapeHTML(state.store.reviewPopupMascotEmoji || '🌾')}" style="max-width:120px; text-align:center; font-size:18px;" />
+            </div>
+            <div class="field">
+              <label style="font-weight:700;">รูปภาพโปรไฟล์/มาสคอตร้าน (Mascot Image URL / Upload)</label>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input class="input" id="setReviewPopupImgUrl" value="${escapeHTML(state.store.reviewPopupImage || '')}" placeholder="วาง URL รูปภาพ หรือกดปุ่มอัปโหลด" style="flex:1;" />
+                <input type="file" id="fileReviewPopupImg" accept="image/*" style="display:none;" />
+                <button type="button" class="btn btn-sm btn-primary" id="btnUploadReviewPopupImg" style="font-weight:700; white-space:nowrap;">อัปโหลดรูป</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="btnClearReviewPopupImg" style="color:var(--danger); font-weight:700; white-space:nowrap; ${state.store.reviewPopupImage ? 'display:inline-block;' : 'display:none;'}">ลบรูป</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid" style="margin-top:14px;">
+          <!-- SECTION 13: Danger Zone / Factory Reset (ล้างข้อมูลระบบทั้งหมด & รีเซ็ตค่าเริ่มต้น) -->
           <div class="card" style="border:1.5px solid var(--danger); background:rgba(229,139,148,0.05); border-radius:18px;">
             <div class="flex items-center" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
               <div>
@@ -5909,6 +6141,57 @@
       formWrap.querySelector(sel)?.addEventListener('input', updateStockPreview);
     });
 
+    // Review Celebration Popup Handlers
+    let currentReviewPopupImage = state.store.reviewPopupImage || '';
+    const fileReviewPopupImg = formWrap.querySelector('#fileReviewPopupImg');
+    const btnUploadReviewPopupImg = formWrap.querySelector('#btnUploadReviewPopupImg');
+    const btnClearReviewPopupImg = formWrap.querySelector('#btnClearReviewPopupImg');
+    const reviewPopupImgUrlInp = formWrap.querySelector('#setReviewPopupImgUrl');
+
+    btnUploadReviewPopupImg?.addEventListener('click', () => fileReviewPopupImg?.click());
+    fileReviewPopupImg?.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        currentReviewPopupImage = evt.target.result;
+        if (reviewPopupImgUrlInp) reviewPopupImgUrlInp.value = '(Uploaded Photo)';
+        if (btnClearReviewPopupImg) btnClearReviewPopupImg.style.display = 'inline-block';
+        toast('อัปโหลดรูปภาพมาสคอตสำหรับป๊อปอัพเรียบร้อย', 'success');
+      };
+      reader.readAsDataURL(file);
+    });
+
+    reviewPopupImgUrlInp?.addEventListener('input', (e) => {
+      currentReviewPopupImage = e.target.value.trim();
+      if (btnClearReviewPopupImg) btnClearReviewPopupImg.style.display = currentReviewPopupImage ? 'inline-block' : 'none';
+    });
+
+    btnClearReviewPopupImg?.addEventListener('click', () => {
+      currentReviewPopupImage = '';
+      if (reviewPopupImgUrlInp) reviewPopupImgUrlInp.value = '';
+      btnClearReviewPopupImg.style.display = 'none';
+      toast('ลบรูปภาพมาสคอตป๊อปอัพแล้ว', 'info');
+    });
+
+    formWrap.querySelector('#btnTestCelebrationPopup')?.addEventListener('click', () => {
+      const tempTitle = formWrap.querySelector('#setReviewPopupTitle')?.value.trim() || state.store.reviewPopupTitle;
+      const tempMsg = formWrap.querySelector('#setReviewPopupMsg')?.value.trim() || state.store.reviewPopupMsg;
+      const tempEmoji = formWrap.querySelector('#setReviewPopupEmoji')?.value.trim() || state.store.reviewPopupMascotEmoji;
+      const tempImg = (currentReviewPopupImage && !currentReviewPopupImage.startsWith('(Uploaded')) ? currentReviewPopupImage : (reviewPopupImgUrlInp?.value && reviewPopupImgUrlInp.value !== '(Uploaded Photo)' ? reviewPopupImgUrlInp.value : currentReviewPopupImage);
+      
+      const prevStoreConfig = { ...state.store };
+      state.store.reviewPopupTitle = tempTitle;
+      state.store.reviewPopupMsg = tempMsg;
+      state.store.reviewPopupMascotEmoji = tempEmoji;
+      state.store.reviewPopupImage = tempImg;
+
+      openReviewCelebrationModal(5, 'คุณลูกค้า (ตัวอย่าง)');
+
+      // Restore temporary store config
+      state.store = prevStoreConfig;
+    });
+
     // Bind save actions
     const doSave = () => {
       state.store.loadingTitle = formWrap.querySelector('#setLoadingTitle')?.value.trim() || state.store.name || 'BNC HayMate';
@@ -5920,6 +6203,12 @@
       state.store.heroIconType = heroIconType;
       state.store.heroEmoji = formWrap.querySelector('#setHeroEmoji')?.value.trim() || '';
       state.store.heroImage = (heroImage && !heroImage.startsWith('(Uploaded')) ? heroImage : (heroUrlInp?.value && heroUrlInp.value !== '(Uploaded Photo)' && heroUrlInp.value.startsWith('http') ? heroUrlInp.value : heroImage);
+
+      // Save Review Celebration Popup Settings
+      state.store.reviewPopupTitle = formWrap.querySelector('#setReviewPopupTitle')?.value.trim() || 'ขอบคุณสำหรับรีวิวนะคะ! 💖';
+      state.store.reviewPopupMsg = formWrap.querySelector('#setReviewPopupMsg')?.value.trim() || 'ทุกรีวิวและคะแนนคือกำลังใจอันล้ำค่าของฟาร์ม BNC HayMate ขอบคุณที่ไว้วางใจและเลือกอุดหนุนเรานะคะ ✨';
+      state.store.reviewPopupMascotEmoji = formWrap.querySelector('#setReviewPopupEmoji')?.value.trim() || '🌾';
+      state.store.reviewPopupImage = (currentReviewPopupImage && !currentReviewPopupImage.startsWith('(Uploaded')) ? currentReviewPopupImage : (reviewPopupImgUrlInp?.value && reviewPopupImgUrlInp.value !== '(Uploaded Photo)' ? reviewPopupImgUrlInp.value : currentReviewPopupImage || '');
 
       state.store.highlights = currentHighlights.map(h => ({
         iconType: h.iconType || 'emoji',
@@ -6986,6 +7275,8 @@
         const discount = calculatePromoDiscount(state.appliedPromo, subtotal);
         const total = Math.max(0, subtotal - discount);
 
+        state.checkoutForm = state.checkoutForm || { name: '', farmName: '', farmTag: '', contact: '', uploadedSlipData: '' };
+
         view.appendChild(el(`
           <div class="grid two-col">
             <div class="card">
@@ -6994,21 +7285,21 @@
               <div class="grid" style="gap:10px; margin-top:10px">
                 <div class="field">
                   <label style="font-size:12px; font-weight:700;">Name (ชื่อลูกค้าที่จะขึ้นในใบเสร็จ) *</label>
-                  <input class="input" id="coName" placeholder="เช่น Anna Wong, คุณสมชาย" value="" style="padding:9px 12px; font-size:13px; border-radius:12px;"/>
+                  <input class="input" id="coName" placeholder="เช่น Anna Wong, คุณสมชาย" value="${escapeHTML(state.checkoutForm.name || '')}" style="padding:9px 12px; font-size:13px; border-radius:12px;"/>
                 </div>
                 <div class="grid" style="grid-template-columns:1fr 1fr; gap:10px">
                   <div class="field">
                     <label style="font-size:12px; font-weight:700;">Farm Name (ชื่อฟาร์ม)</label>
-                    <input class="input" id="coFarmName" placeholder="เช่น Green Valley Farm" value="" style="padding:9px 12px; font-size:13px; border-radius:12px;"/>
+                    <input class="input" id="coFarmName" placeholder="เช่น Green Valley Farm" value="${escapeHTML(state.checkoutForm.farmName || '')}" style="padding:9px 12px; font-size:13px; border-radius:12px;"/>
                   </div>
                   <div class="field">
                     <label style="font-size:12px; font-weight:700;">Farm Tag</label>
-                    <input class="input" id="coFarmTag" placeholder="เช่น #FARM-01" value="" style="padding:9px 12px; font-size:13px; border-radius:12px;"/>
+                    <input class="input" id="coFarmTag" placeholder="เช่น #FARM-01" value="${escapeHTML(state.checkoutForm.farmTag || '')}" style="padding:9px 12px; font-size:13px; border-radius:12px;"/>
                   </div>
                 </div>
                 <div class="field">
                   <label style="font-size:12px; font-weight:700;">Contact (ช่องทางการติดต่อของลูกค้า) *</label>
-                  <input class="input" id="coContact" placeholder="เช่น เบอร์โทร 081-234-5678, Line ID: @haymate" value="" style="padding:9px 12px; font-size:13px; border-radius:12px;"/>
+                  <input class="input" id="coContact" placeholder="เช่น เบอร์โทร 081-234-5678, Line ID: @haymate" value="${escapeHTML(state.checkoutForm.contact || '')}" style="padding:9px 12px; font-size:13px; border-radius:12px;"/>
                 </div>
               </div>
             </div>
@@ -7074,13 +7365,37 @@
           </div>
         `));
 
-        let uploadedSlipData = '';
+        // Preserve input fields real-time
+        const coNameEl = view.querySelector('#coName');
+        const coFarmNameEl = view.querySelector('#coFarmName');
+        const coFarmTagEl = view.querySelector('#coFarmTag');
+        const coContactEl = view.querySelector('#coContact');
+
+        coNameEl?.addEventListener('input', (e) => { state.checkoutForm.name = e.target.value; });
+        coFarmNameEl?.addEventListener('input', (e) => { state.checkoutForm.farmName = e.target.value; });
+        coFarmTagEl?.addEventListener('input', (e) => { state.checkoutForm.farmTag = e.target.value; });
+        coContactEl?.addEventListener('input', (e) => { state.checkoutForm.contact = e.target.value; });
+
+        let uploadedSlipData = state.checkoutForm.uploadedSlipData || '';
         const slipInput = view.querySelector('#slipFileInput');
         const slipDropzone = view.querySelector('#slipUploadDropzone');
         const slipPrompt = view.querySelector('#slipPrompt');
         const slipPreviewWrapper = view.querySelector('#slipPreviewWrapper');
         const slipPreviewImg = view.querySelector('#slipPreviewImg');
         const slipStatusBadge = view.querySelector('#slipStatusBadge');
+
+        // If slip was previously uploaded in this session, restore preview immediately
+        if (uploadedSlipData) {
+          slipPreviewImg.src = uploadedSlipData;
+          slipPrompt.style.display = 'none';
+          slipPreviewWrapper.style.display = 'block';
+          slipDropzone.style.borderColor = '#7CC59A';
+          slipDropzone.style.background = '#F4FAF6';
+          if (slipStatusBadge) {
+            slipStatusBadge.textContent = '✓ แนบสลิปแล้ว';
+            slipStatusBadge.style.color = '#3F8E63';
+          }
+        }
 
         // Copy buttons logic (Solid theme color -> Copied)
         view.querySelectorAll('.btn-copy-acc').forEach(btn => {
@@ -7105,12 +7420,12 @@
         });
 
         slipDropzone.addEventListener('click', () => slipInput.click());
-        slipInput.addEventListener('change', (e) => {
+        slipInput.addEventListener('change', async (e) => {
           const file = e.target.files[0];
           if (!file) return;
-          const reader = new FileReader();
-          reader.onload = (evt) => {
-            uploadedSlipData = evt.target.result;
+          try {
+            uploadedSlipData = await compressImageToDataUrl(file, 900, 1200, 0.82);
+            state.checkoutForm.uploadedSlipData = uploadedSlipData;
             slipPreviewImg.src = uploadedSlipData;
             slipPrompt.style.display = 'none';
             slipPreviewWrapper.style.display = 'block';
@@ -7121,8 +7436,9 @@
               slipStatusBadge.style.color = '#3F8E63';
             }
             toast('แนบสลิปโอนเงินเรียบร้อย', 'success');
-          };
-          reader.readAsDataURL(file);
+          } catch (err) {
+            toast('ไม่สามารถอ่านรูปภาพสลิปได้ โปรดลองอีกครั้ง', 'error');
+          }
         });
 
         view.querySelector('#confirmPay').addEventListener('click', async () => {
@@ -7177,6 +7493,9 @@
           };
           ORDERS.unshift(newOrder);
           persistOrders();
+
+          // Reset checkout form state
+          state.checkoutForm = { name: '', farmName: '', farmTag: '', contact: '', uploadedSlipData: '' };
 
           // Update Customer records locally
           const custEmail = (contact && contact.includes('@')) ? contact : `${(name || 'customer').toLowerCase().replace(/\s+/g, '')}@customer.com`;
