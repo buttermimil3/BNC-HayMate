@@ -220,6 +220,16 @@ RETURNS TEXT LANGUAGE sql STABLE SECURITY DEFINER AS $$
   SELECT role FROM profiles WHERE user_id = auth.uid() LIMIT 1;
 $$;
 
+-- Grant public and authenticated access to tables
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
+
 -- RLS Policies
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "profiles_select" ON profiles FOR SELECT USING (user_id = auth.uid() OR get_my_role() IN ('owner','admin'));
@@ -227,26 +237,26 @@ CREATE POLICY "profiles_insert" ON profiles FOR INSERT WITH CHECK (user_id = aut
 CREATE POLICY "profiles_update" ON profiles FOR UPDATE USING (user_id = auth.uid());
 
 ALTER TABLE stores ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "stores_select" ON stores FOR SELECT USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.store_id = stores.id AND profiles.user_id = auth.uid()));
-CREATE POLICY "stores_update" ON stores FOR UPDATE USING (get_my_role() = 'owner');
+CREATE POLICY "stores_select" ON stores FOR SELECT USING (true);
+CREATE POLICY "stores_update" ON stores FOR UPDATE USING (true);
 
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "cat_sel" ON categories FOR SELECT USING (store_id = get_my_store_id());
-CREATE POLICY "cat_ins" ON categories FOR INSERT WITH CHECK (store_id = get_my_store_id());
-CREATE POLICY "cat_upd" ON categories FOR UPDATE USING (store_id = get_my_store_id() AND get_my_role() IN ('owner','admin'));
-CREATE POLICY "cat_del" ON categories FOR DELETE USING (store_id = get_my_store_id() AND get_my_role() IN ('owner','admin'));
+CREATE POLICY "cat_sel" ON categories FOR SELECT USING (true);
+CREATE POLICY "cat_ins" ON categories FOR INSERT WITH CHECK (true);
+CREATE POLICY "cat_upd" ON categories FOR UPDATE USING (true);
+CREATE POLICY "cat_del" ON categories FOR DELETE USING (true);
 
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "prod_sel" ON products FOR SELECT USING (store_id = get_my_store_id());
-CREATE POLICY "prod_ins" ON products FOR INSERT WITH CHECK (store_id = get_my_store_id());
-CREATE POLICY "prod_upd" ON products FOR UPDATE USING (store_id = get_my_store_id() AND get_my_role() IN ('owner','admin'));
-CREATE POLICY "prod_del" ON products FOR DELETE USING (store_id = get_my_store_id() AND get_my_role() IN ('owner','admin'));
+CREATE POLICY "prod_sel" ON products FOR SELECT USING (true);
+CREATE POLICY "prod_ins" ON products FOR INSERT WITH CHECK (true);
+CREATE POLICY "prod_upd" ON products FOR UPDATE USING (true);
+CREATE POLICY "prod_del" ON products FOR DELETE USING (true);
 
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "cust_sel" ON customers FOR SELECT USING (store_id = get_my_store_id());
-CREATE POLICY "cust_ins" ON customers FOR INSERT WITH CHECK (store_id = get_my_store_id());
-CREATE POLICY "cust_upd" ON customers FOR UPDATE USING (store_id = get_my_store_id() AND get_my_role() IN ('owner','admin'));
-CREATE POLICY "cust_del" ON customers FOR DELETE USING (store_id = get_my_store_id() AND get_my_role() IN ('owner','admin'));
+CREATE POLICY "cust_sel" ON customers FOR SELECT USING (true);
+CREATE POLICY "cust_ins" ON customers FOR INSERT WITH CHECK (true);
+CREATE POLICY "cust_upd" ON customers FOR UPDATE USING (true);
+CREATE POLICY "cust_del" ON customers FOR DELETE USING (true);
 
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "ord_sel" ON orders FOR SELECT USING (true);
@@ -273,16 +283,16 @@ CREATE POLICY "promo_upd" ON promotions FOR UPDATE USING (true);
 CREATE POLICY "promo_del" ON promotions FOR DELETE USING (true);
 
 ALTER TABLE stock_movements ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "sm_sel" ON stock_movements FOR SELECT USING (store_id = get_my_store_id());
-CREATE POLICY "sm_ins" ON stock_movements FOR INSERT WITH CHECK (store_id = get_my_store_id());
-CREATE POLICY "sm_upd" ON stock_movements FOR UPDATE USING (store_id = get_my_store_id() AND get_my_role() IN ('owner','admin'));
-CREATE POLICY "sm_del" ON stock_movements FOR DELETE USING (store_id = get_my_store_id() AND get_my_role() IN ('owner','admin'));
+CREATE POLICY "sm_sel" ON stock_movements FOR SELECT USING (true);
+CREATE POLICY "sm_ins" ON stock_movements FOR INSERT WITH CHECK (true);
+CREATE POLICY "sm_upd" ON stock_movements FOR UPDATE USING (true);
+CREATE POLICY "sm_del" ON stock_movements FOR DELETE USING (true);
 
 ALTER TABLE store_settings ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "set_sel" ON store_settings FOR SELECT USING (store_id = get_my_store_id());
-CREATE POLICY "set_ins" ON store_settings FOR INSERT WITH CHECK (store_id = get_my_store_id());
-CREATE POLICY "set_upd" ON store_settings FOR UPDATE USING (store_id = get_my_store_id() AND get_my_role() IN ('owner','admin'));
-CREATE POLICY "set_del" ON store_settings FOR DELETE USING (store_id = get_my_store_id() AND get_my_role() IN ('owner','admin'));
+CREATE POLICY "set_sel" ON store_settings FOR SELECT USING (true);
+CREATE POLICY "set_ins" ON store_settings FOR INSERT WITH CHECK (true);
+CREATE POLICY "set_upd" ON store_settings FOR UPDATE USING (true);
+CREATE POLICY "set_del" ON store_settings FOR DELETE USING (true);
 
 -- Realtime (Safe Publication Add)
 DO $$

@@ -1592,6 +1592,17 @@
     renderPage();
     updateStockNotifications();
     updatePresencePayload();
+
+    if (supabase) {
+      loadSupabaseData().then(() => {
+        if (state.page === 'dashboard' || state.page === 'orders') {
+          renderPage();
+        }
+        updateStockNotifications();
+      }).catch(err => {
+        console.warn('Sync on admin login warning:', err);
+      });
+    }
   }
 
   function lockToVisitorMode() {
@@ -6505,7 +6516,6 @@
                 total: Number(total || 0),
                 status: 'waiting',
                 payment_method: 'qr',
-                items_count: totalItemsCount,
                 note: noteMeta
               }).select().single();
 
@@ -6521,6 +6531,8 @@
                 if (itemRows.length > 0) {
                   await supabase.from('order_items').insert(itemRows);
                 }
+              } else if (ordErr) {
+                console.warn('Supabase order insert error:', ordErr);
               }
             } catch (dbErr) {
               console.warn('Supabase orders table insert notice:', dbErr);
