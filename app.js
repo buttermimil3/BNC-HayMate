@@ -1343,12 +1343,6 @@
   async function checkAuthSession() {
     if (!supabase) return;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const { data: profile } = await supabase.from('profiles').select('*').eq('user_id', session.user.id).single();
-        const userName = profile?.full_name || session.user.user_metadata?.full_name || 'Admin';
-        unlockAdminMode({ full_name: userName, email: session.user.email, role: profile?.role || 'Store Owner' });
-      }
       supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' && session?.user) {
           const { data: profile } = await supabase.from('profiles').select('*').eq('user_id', session.user.id).single();
@@ -7736,7 +7730,11 @@
     // Also wait for Supabase data (if still in flight after animation)
     await dataPromise;
 
-    // Single authoritative render — always from Supabase data
+    // Ensure initial load is always the Customer Storefront
+    if (!state.isAdmin) {
+      state.page = 'store';
+    }
+    renderMenu();
     renderPage();
   }
 
