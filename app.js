@@ -291,10 +291,9 @@
     starLabel4: '4 ดวงใจ - อร่อยและประทับใจมาก',
     starLabel5: '5 ดวงใจ - ประทับใจมากที่สุด ยอดเยี่ยม!',
     // Review Celebration Popup Settings (Configurable in Settings)
-    reviewPopupTitle: 'ขอบคุณสำหรับรีวิวนะคะ! 💖',
-    reviewPopupMsg: 'ทุกรีวิวและคะแนนคือกำลังใจอันล้ำค่าของฟาร์ม BNC HayMate ขอบคุณที่ไว้วางใจและเลือกอุดหนุนเรานะคะ ✨',
+    reviewPopupTitle: 'Thank You',
+    reviewPopupMsg: 'กลับมาใหม่น้า',
     reviewPopupImage: '',
-    reviewPopupMascotEmoji: '🌾',
     currency: 'THB (฿)',
     timezone: 'UTC+7 Bangkok',
     bank_name: '',
@@ -838,6 +837,7 @@
             const parts = o.note.split('|').map(s => s.trim());
             parts.forEach(p => {
               if (p.startsWith('Customer:')) custName = p.replace('Customer:', '').trim();
+              if (p.startsWith('Tag:')) farmT = p.replace('Tag:', '').trim();
               if (p.startsWith('Farm:')) farmN = p.replace('Farm:', '').trim();
               if (p.startsWith('Contact:')) contactInfo = p.replace('Contact:', '').trim();
               if (p.startsWith('Slip:')) slipUrl = p.replace('Slip:', '').trim();
@@ -1071,8 +1071,9 @@
         })
         .on('broadcast', { event: 'review_created' }, ({ payload }) => {
           console.log('Realtime broadcast review_created received:', payload);
-          if (payload && payload.id) {
-            if (!REVIEWS.some(r => String(r.id) === String(payload.id))) {
+          if (payload && (payload.id || payload.name)) {
+            const isDup = REVIEWS.some(r => String(r.id) === String(payload.id) || (r.name === payload.name && r.text === payload.text));
+            if (!isDup) {
               REVIEWS.unshift(payload);
               if (['reviews', 'dashboard', 'store'].includes(state.page)) {
                 renderPage();
@@ -1279,7 +1280,8 @@
           console.log('Realtime reviews change:', payload);
           if (payload.eventType === 'INSERT') {
             const r = payload.new;
-            if (!REVIEWS.some(x => String(x.id) === String(r.id))) {
+            const isDup = REVIEWS.some(x => String(x.id) === String(r.id) || (x.name === r.customer_name && x.text === r.comment));
+            if (!isDup) {
               REVIEWS.unshift({
                 id: r.id,
                 name: r.customer_name || 'Valued Guest',
@@ -1291,6 +1293,11 @@
               });
               if (['reviews', 'dashboard', 'store'].includes(state.page)) {
                 renderPage();
+              }
+            } else {
+              const match = REVIEWS.find(x => x.name === r.customer_name && x.text === r.comment);
+              if (match && String(match.id).startsWith('rev_')) {
+                match.id = r.id;
               }
             }
           }
@@ -4291,90 +4298,60 @@
   // ============================================================
   // Review Celebration & Thank You Popup
   // ============================================================
-  function openReviewCelebrationModal(rating = 5, customerName = '') {
-    const title = state.store.reviewPopupTitle || 'ขอบคุณสำหรับรีวิวนะคะ! 💖';
-    const msg = state.store.reviewPopupMsg || 'ทุกรีวิวและคะแนนคือกำลังใจอันล้ำค่าของฟาร์ม BNC HayMate ขอบคุณที่ไว้วางใจและเลือกอุดหนุนเรานะคะ ✨';
+  // ============================================================
+  // Review Celebration & Thank You Popup (Minimalist Mascot Bounce & Chubby Heart Home Button)
+  // ============================================================
+  function openReviewCelebrationModal() {
+    const title = state.store.reviewPopupTitle || 'Thank You';
+    const msg = state.store.reviewPopupMsg || 'กลับมาใหม่น้า';
     const mascotImg = state.store.reviewPopupImage || '';
-    const mascotEmoji = state.store.reviewPopupMascotEmoji || '🌾';
 
     const body = el(`
-      <div style="text-align:center; padding:12px 6px 14px; position:relative; overflow:hidden;">
-        <!-- Cute Bursting Confetti / Hearts Container -->
-        <div class="celebration-burst-container" id="celebrationBurst"></div>
-
-        <!-- Mascot Avatar / Profile Image with Bounce Animation -->
-        <div style="position:relative; width:94px; height:94px; margin:0 auto 14px; border-radius:28px; background:linear-gradient(135deg, var(--primary-100), var(--primary-50)); border:3px solid var(--primary-600); box-shadow:0 8px 24px rgba(239, 166, 193, 0.4); display:grid; place-items:center; animation:popBounce .6s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
-          ${mascotImg ? `
-            <img src="${escapeHTML(mascotImg)}" alt="Mascot" style="width:100%; height:100%; object-fit:cover; border-radius:24px;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='grid';" />
-            <div style="display:none; font-size:44px;">${escapeHTML(mascotEmoji)}</div>
-          ` : `
-            <div style="font-size:46px;">${escapeHTML(mascotEmoji)}</div>
-          `}
-          <div style="position:absolute; bottom:-6px; right:-6px; background:#FFFFFF; border:2px solid var(--primary-600); border-radius:50%; width:30px; height:30px; display:grid; place-items:center; box-shadow:var(--shadow-soft);">
-            <span style="font-size:16px;">💖</span>
-          </div>
-        </div>
-
-        <!-- Big Sunshine Heading Title -->
-        <h2 style="font-family:'Fredoka', 'Plus Jakarta Sans', sans-serif; font-size:22px; font-weight:800; color:var(--text); margin:0 0 6px; line-height:1.3; letter-spacing:-0.3px;">
+      <div style="text-align:center; padding:18px 12px 14px; position:relative; overflow:hidden;">
+        <!-- Top Curved Bouncing Title above Mascot -->
+        <div class="curved-celebration-title">
           ${escapeHTML(title)}
-        </h2>
-
-        <!-- Rating Hearts Display -->
-        <div style="display:flex; justify-content:center; gap:6px; margin:8px 0 14px;">
-          ${[1, 2, 3, 4, 5].map(n => `
-            <span style="display:inline-flex; align-items:center;">
-              <svg viewBox="0 0 24 24" width="22" height="22" style="fill:${n <= rating ? 'var(--primary-600)' : 'var(--border)'}; stroke:${n <= rating ? 'var(--primary-600)' : 'var(--border)'}; stroke-width:2;"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-            </span>
-          `).join('')}
         </div>
 
-        <!-- Sweet Speech Bubble -->
-        <div style="background:var(--primary-50); border:1.5px dashed var(--border); border-radius:18px; padding:14px 18px; position:relative; margin:0 4px 16px;">
-          <div style="font-size:13.5px; line-height:1.6; color:var(--text); font-weight:600;">
-            ${escapeHTML(msg)}
-          </div>
-          ${customerName ? `
-            <div style="font-size:11.5px; color:var(--muted); font-weight:700; margin-top:6px;">
-              — จากใจทีมงาน BNC HayMate ถึงคุณ ${escapeHTML(customerName)} 🌾
+        <!-- Center Mascot Image with Bouncing Effect -->
+        <div class="mascot-celebration-wrap">
+          ${mascotImg ? `
+            <img src="${escapeHTML(mascotImg)}" alt="Mascot" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='grid';" />
+            <div style="display:none; width:100%; height:100%; place-items:center; color:var(--primary-600);">
+              <svg viewBox="0 0 24 24" width="60" height="60" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
             </div>
-          ` : ''}
+          ` : `
+            <div style="display:grid; place-items:center; width:100%; height:100%; color:var(--primary-600);">
+              <svg viewBox="0 0 24 24" width="60" height="60" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+            </div>
+          `}
         </div>
 
-        <!-- Cute Action Button -->
-        <button type="button" class="btn btn-primary" id="btnCelebrationClose" style="font-size:14px; font-weight:800; padding:10px 28px; border-radius:14px; box-shadow:0 4px 14px rgba(239,166,193,0.4); cursor:pointer;">
-          ยินดีต้อนรับเสมอค่ะ ✨
+        <!-- Subtitle below Mascot -->
+        <div class="celebration-sub-text">
+          ${escapeHTML(msg)}
+        </div>
+
+        <!-- Chubby Heart Button with Home SVG Icon Inside -->
+        <button type="button" class="btn-chubby-heart" id="btnCelebrationHome" title="กลับหน้าแรก (Back to Home)" aria-label="Home">
+          <svg viewBox="0 0 100 90" width="76" height="70" fill="var(--primary-600)" style="display:block; filter:drop-shadow(0 6px 14px rgba(239, 166, 193, 0.5));">
+            <path d="M50 82 C50 82 8 52 8 28 C8 12 22 4 35 4 C43 4 47 8 50 12 C53 8 57 4 65 4 C78 4 92 12 92 28 C92 52 50 82 50 82 Z" />
+          </svg>
+          <div class="heart-home-icon">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+          </div>
         </button>
       </div>
     `);
 
-    // Trigger Floating Confetti / Hearts Burst Animation
-    const burstContainer = body.querySelector('#celebrationBurst');
-    if (burstContainer) {
-      const emojis = ['💖', '✨', '🌸', '⭐', '🎉', '🌾', '💫', '💕'];
-      for (let i = 0; i < 28; i++) {
-        const span = document.createElement('span');
-        span.textContent = emojis[Math.floor(Math.random() * emojis.length)];
-        const left = 8 + Math.random() * 84;
-        const animDuration = 1.2 + Math.random() * 1.4;
-        const delay = Math.random() * 0.35;
-        const size = 16 + Math.random() * 18;
-        span.style.cssText = `
-          position: absolute;
-          left: ${left}%;
-          top: 65%;
-          font-size: ${size}px;
-          opacity: 0;
-          pointer-events: none;
-          animation: floatBurst ${animDuration}s cubic-bezier(0.25, 1, 0.5, 1) ${delay}s forwards;
-          z-index: 10;
-        `;
-        burstContainer.appendChild(span);
-      }
-    }
-
-    body.querySelector('#btnCelebrationClose')?.addEventListener('click', () => {
+    body.querySelector('#btnCelebrationHome')?.addEventListener('click', () => {
       closeModal();
+      state.page = 'store';
+      renderMenu();
+      renderPage();
     });
 
     openModal({
@@ -4463,17 +4440,24 @@
             pinned: false
           };
 
-          REVIEWS.unshift(newRev);
+          // Deduplicate locally
+          const exists = REVIEWS.some(r => (r.name === name && r.text === text) || String(r.id) === String(newRev.id));
+          if (!exists) {
+            REVIEWS.unshift(newRev);
+          }
 
           if (supabase) {
             try {
-              await supabase.from('reviews').insert({
+              const { data: insertedRev } = await supabase.from('reviews').insert({
                 store_id: state.storeId || '00000000-0000-0000-0000-000000000001',
                 customer_name: name,
                 rating: selectedRating,
                 comment: text,
                 is_pinned: false
-              });
+              }).select().single();
+              if (insertedRev && insertedRev.id) {
+                newRev.id = insertedRev.id;
+              }
             } catch (e) {
               console.warn('Supabase review insert notice:', e);
             }
@@ -4492,8 +4476,8 @@
           closeModal();
           renderPage();
           setTimeout(() => {
-            openReviewCelebrationModal(selectedRating, name);
-          }, 200);
+            openReviewCelebrationModal();
+          }, 180);
         }}
       ]
     });
@@ -5557,37 +5541,37 @@
           <div class="flex items-center" style="justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:10px;">
             <div>
               <div class="card-title">Review Celebration Popup (ป๊อปอัพขอบคุณหลังลูกค้าเขียนรีวิว)</div>
-              <div class="card-sub" style="margin-bottom:0;">ปรับแต่งข้อความ, รูปโปรไฟล์/มาสคอต และเอฟเฟกต์พลุดวงใจน่ารักๆ ที่จะเด้งขึ้นมาหลังจากลูกค้าส่งรีวิว</div>
+              <div class="card-sub" style="margin-bottom:0;">ปรับแต่งข้อความหัวเรื่องบนหัวมาสคอต, รูปภาพมาสคอตเด้งดึ๋ง, และข้อความขอบคุณด้านล่าง (ปุ่มหัวใจนำทางกลับหน้าแรก)</div>
             </div>
-            <button type="button" class="btn btn-sm" id="btnTestCelebrationPopup" style="background:var(--primary-50); border:1.5px solid var(--primary-600); color:var(--accent-text); font-weight:800; border-radius:10px; padding:6px 14px; cursor:pointer;">
-              ✨ ทดสอบเปิดป๊อปอัพ (Test Preview)
+            <button type="button" class="btn btn-sm" id="btnTestCelebrationPopup" style="background:var(--primary-50); border:1.5px solid var(--primary-600); color:var(--accent-text); font-weight:800; border-radius:10px; padding:6px 14px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+              <span>ทดสอบเปิดป๊อปอัพ (Test Preview)</span>
             </button>
           </div>
 
           <div class="grid two-col" style="gap:14px; margin-top:10px;">
             <div class="field">
-              <label style="font-weight:700;">ข้อความหัวเรื่องป๊อปอัพ (Popup Title)</label>
-              <input class="input" id="setReviewPopupTitle" value="${escapeHTML(state.store.reviewPopupTitle || 'ขอบคุณสำหรับรีวิวนะคะ! 💖')}" placeholder="เช่น ขอบคุณสำหรับดวงใจและรีวิวนะคะ! 💖" />
+              <label style="font-weight:700;">ข้อความบนหัวมาสคอต (Top Title Text)</label>
+              <input class="input" id="setReviewPopupTitle" value="${escapeHTML(state.store.reviewPopupTitle || 'Thank You')}" placeholder="เช่น Thank You" />
+              <div style="font-size:11.5px; color:var(--muted); margin-top:3px;">ข้อความตัวอักษรโค้งเด้งดึ๋งด้านบนมาสคอต</div>
             </div>
             <div class="field">
-              <label style="font-weight:700;">ข้อความขอบคุณในบับเบิ้ล (Speech Bubble Message)</label>
-              <textarea class="textarea" id="setReviewPopupMsg" rows="2" placeholder="เช่น ทุกรีวิวและคะแนนคือกำลังใจอันล้ำค่าของฟาร์ม BNC HayMate ขอบคุณที่ไว้วางใจและเลือกอุดหนุนเรานะคะ ✨">${escapeHTML(state.store.reviewPopupMsg || 'ทุกรีวิวและคะแนนคือกำลังใจอันล้ำค่าของฟาร์ม BNC HayMate ขอบคุณที่ไว้วางใจและเลือกอุดหนุนเรานะคะ ✨')}</textarea>
+              <label style="font-weight:700;">ข้อความด้านล่างมาสคอต (Bottom Subtitle Text)</label>
+              <input class="input" id="setReviewPopupMsg" value="${escapeHTML(state.store.reviewPopupMsg || 'กลับมาใหม่น้า')}" placeholder="เช่น กลับมาใหม่น้า" />
+              <div style="font-size:11.5px; color:var(--muted); margin-top:3px;">ข้อความขอบคุณใต้รูปภาพมาสคอต</div>
             </div>
           </div>
 
-          <div class="grid two-col" style="gap:14px; margin-top:10px;">
-            <div class="field">
-              <label style="font-weight:700;">อิโมจิมาสคอตสำรอง (Mascot Emoji)</label>
-              <input class="input" id="setReviewPopupEmoji" value="${escapeHTML(state.store.reviewPopupMascotEmoji || '🌾')}" style="max-width:120px; text-align:center; font-size:18px;" />
-            </div>
-            <div class="field">
-              <label style="font-weight:700;">รูปภาพโปรไฟล์/มาสคอตร้าน (Mascot Image URL / Upload)</label>
-              <div style="display:flex; gap:8px; align-items:center;">
-                <input class="input" id="setReviewPopupImgUrl" value="${escapeHTML(state.store.reviewPopupImage || '')}" placeholder="วาง URL รูปภาพ หรือกดปุ่มอัปโหลด" style="flex:1;" />
-                <input type="file" id="fileReviewPopupImg" accept="image/*" style="display:none;" />
-                <button type="button" class="btn btn-sm btn-primary" id="btnUploadReviewPopupImg" style="font-weight:700; white-space:nowrap;">อัปโหลดรูป</button>
-                <button type="button" class="btn btn-sm btn-ghost" id="btnClearReviewPopupImg" style="color:var(--danger); font-weight:700; white-space:nowrap; ${state.store.reviewPopupImage ? 'display:inline-block;' : 'display:none;'}">ลบรูป</button>
-              </div>
+          <div class="field" style="margin-top:10px;">
+            <label style="font-weight:700;">รูปภาพมาสคอตร้าน (Mascot / Profile Image)</label>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input class="input" id="setReviewPopupImgUrl" value="${escapeHTML(state.store.reviewPopupImage || '')}" placeholder="วาง URL รูปภาพ หรือกดปุ่มอัปโหลดรูปภาพมาสคอต" style="flex:1;" />
+              <input type="file" id="fileReviewPopupImg" accept="image/*" style="display:none;" />
+              <button type="button" class="btn btn-sm btn-primary" id="btnUploadReviewPopupImg" style="font-weight:700; white-space:nowrap; display:inline-flex; align-items:center; gap:6px;">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>อัปโหลดรูป</span>
+              </button>
+              <button type="button" class="btn btn-sm btn-ghost" id="btnClearReviewPopupImg" style="color:var(--danger); font-weight:700; white-space:nowrap; ${state.store.reviewPopupImage ? 'display:inline-block;' : 'display:none;'}">ลบรูป</button>
             </div>
           </div>
         </div>
@@ -6177,16 +6161,14 @@
     formWrap.querySelector('#btnTestCelebrationPopup')?.addEventListener('click', () => {
       const tempTitle = formWrap.querySelector('#setReviewPopupTitle')?.value.trim() || state.store.reviewPopupTitle;
       const tempMsg = formWrap.querySelector('#setReviewPopupMsg')?.value.trim() || state.store.reviewPopupMsg;
-      const tempEmoji = formWrap.querySelector('#setReviewPopupEmoji')?.value.trim() || state.store.reviewPopupMascotEmoji;
       const tempImg = (currentReviewPopupImage && !currentReviewPopupImage.startsWith('(Uploaded')) ? currentReviewPopupImage : (reviewPopupImgUrlInp?.value && reviewPopupImgUrlInp.value !== '(Uploaded Photo)' ? reviewPopupImgUrlInp.value : currentReviewPopupImage);
       
       const prevStoreConfig = { ...state.store };
       state.store.reviewPopupTitle = tempTitle;
       state.store.reviewPopupMsg = tempMsg;
-      state.store.reviewPopupMascotEmoji = tempEmoji;
       state.store.reviewPopupImage = tempImg;
 
-      openReviewCelebrationModal(5, 'คุณลูกค้า (ตัวอย่าง)');
+      openReviewCelebrationModal();
 
       // Restore temporary store config
       state.store = prevStoreConfig;
@@ -6205,9 +6187,8 @@
       state.store.heroImage = (heroImage && !heroImage.startsWith('(Uploaded')) ? heroImage : (heroUrlInp?.value && heroUrlInp.value !== '(Uploaded Photo)' && heroUrlInp.value.startsWith('http') ? heroUrlInp.value : heroImage);
 
       // Save Review Celebration Popup Settings
-      state.store.reviewPopupTitle = formWrap.querySelector('#setReviewPopupTitle')?.value.trim() || 'ขอบคุณสำหรับรีวิวนะคะ! 💖';
-      state.store.reviewPopupMsg = formWrap.querySelector('#setReviewPopupMsg')?.value.trim() || 'ทุกรีวิวและคะแนนคือกำลังใจอันล้ำค่าของฟาร์ม BNC HayMate ขอบคุณที่ไว้วางใจและเลือกอุดหนุนเรานะคะ ✨';
-      state.store.reviewPopupMascotEmoji = formWrap.querySelector('#setReviewPopupEmoji')?.value.trim() || '🌾';
+      state.store.reviewPopupTitle = formWrap.querySelector('#setReviewPopupTitle')?.value.trim() || 'Thank You';
+      state.store.reviewPopupMsg = formWrap.querySelector('#setReviewPopupMsg')?.value.trim() || 'กลับมาใหม่น้า';
       state.store.reviewPopupImage = (currentReviewPopupImage && !currentReviewPopupImage.startsWith('(Uploaded')) ? currentReviewPopupImage : (reviewPopupImgUrlInp?.value && reviewPopupImgUrlInp.value !== '(Uploaded Photo)' ? reviewPopupImgUrlInp.value : currentReviewPopupImage || '');
 
       state.store.highlights = currentHighlights.map(h => ({
@@ -7436,6 +7417,15 @@
               slipStatusBadge.style.color = '#3F8E63';
             }
             toast('แนบสลิปโอนเงินเรียบร้อย', 'success');
+
+            if (supabase) {
+              uploadProductImage(file).then(pubUrl => {
+                if (pubUrl) {
+                  uploadedSlipData = pubUrl;
+                  state.checkoutForm.uploadedSlipData = pubUrl;
+                }
+              }).catch(() => {});
+            }
           } catch (err) {
             toast('ไม่สามารถอ่านรูปภาพสลิปได้ โปรดลองอีกครั้ง', 'error');
           }

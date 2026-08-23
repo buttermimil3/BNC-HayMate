@@ -1380,7 +1380,7 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
   background: var(--primary-600);
 }
 
-/* Cute Review Celebration Popup Animations */
+/* Cute Review Celebration Popup Animations & Chubby Heart Home Button */
 .celebration-burst-container {
   position: absolute;
   top: 0;
@@ -1393,22 +1393,88 @@ table.data th:last-child, table.data td:last-child{padding-right:20px}
 }
 
 @keyframes popBounce {
-  0% { transform: scale(0.3); opacity: 0; }
-  60% { transform: scale(1.15); opacity: 1; }
-  80% { transform: scale(0.95); }
-  100% { transform: scale(1); opacity: 1; }
+  0% { transform: scale(0.3) translateY(20px); opacity: 0; }
+  60% { transform: scale(1.1) translateY(-6px); opacity: 1; }
+  80% { transform: scale(0.96) translateY(2px); }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
 }
 
-@keyframes floatBurst {
-  0% {
-    transform: translateY(0) scale(0.4) rotate(0deg);
-    opacity: 1;
-  }
-  30% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(-200px) scale(1.25) rotate(45deg);
-    opacity: 0;
-  }
+@keyframes mascotBounce {
+  0% { transform: scale(0.2) rotate(-10deg); opacity: 0; }
+  55% { transform: scale(1.18) rotate(4deg); opacity: 1; }
+  75% { transform: scale(0.92) rotate(-2deg); }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+@keyframes heartPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+.curved-celebration-title {
+  font-family: 'Fredoka', 'Plus Jakarta Sans', sans-serif;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  color: var(--primary-600);
+  text-shadow: 0 2px 10px rgba(239, 166, 193, 0.35);
+  margin: 0 0 12px;
+  animation: popBounce 0.65s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+.mascot-celebration-wrap {
+  width: 130px;
+  height: 130px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-100), var(--primary-50));
+  border: 4px solid var(--primary-600);
+  box-shadow: 0 10px 28px rgba(239, 166, 193, 0.45);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  animation: mascotBounce 0.75s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.celebration-sub-text {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 18px;
+  line-height: 1.5;
+}
+
+.btn-chubby-heart {
+  position: relative;
+  background: transparent;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.2s ease;
+  animation: heartPulse 2.2s infinite ease-in-out;
+  margin: 4px auto 6px;
+}
+
+.btn-chubby-heart:hover {
+  transform: scale(1.14) !important;
+  filter: drop-shadow(0 8px 18px rgba(239, 166, 193, 0.6));
+}
+
+.btn-chubby-heart:active {
+  transform: scale(0.94) !important;
+}
+
+.btn-chubby-heart .heart-home-icon {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  color: #FFFFFF;
+  pointer-events: none;
 }
